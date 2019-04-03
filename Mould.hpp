@@ -47,8 +47,9 @@ public:
 
   void cut(Plane p, bool discard = false) {
     std::vector<Face> nfaces{};
-    Face n1{}, n2{};
-    n1.normal = p.normal;
+    Face nIn{}, nOut{};
+    nIn.normal = p.normal;
+    nOut.normal = -p.normal;
     for(auto& f : faces) {
       unsigned c1 = 0, c2 = 0;
       for(auto ix : f.vertices)
@@ -69,7 +70,7 @@ public:
         nfaces.push_back(std::move(f));
         continue;
       }
-      Face f1{}, f2{};
+      Face fIn{}, fOut{};
       const Vertex *last = &vertices[f.vertices.back()];
       float ldot = *last * p;
       for(auto ix : f.vertices) {
@@ -78,12 +79,19 @@ public:
         if(ldot * dot < 0) {
           auto intersect = (dot * *last - ldot * *cur)/(dot - ldot);
           auto [newIx, added] = find_or_append(std::move(intersect));
-          f1.vertices.push_back(newIx);
-          f2.vertices.push_back(newIx);
-          if(added)
-            n1.vertices.push_back(newIx);
+          fIn.vertices.push_back(newIx);
+          if(!discard)
+            fOut.vertices.push_back(newIx);
+          if(added) { // TODO: will not cause problems?
+            nIn.vertices.push_back(newIx);
+            if(!discard)
+              nOut.vertices.push_back(newIx);
+          }
         }
-        (dot < 0 ? f1 : f2).vertices.push_back(ix);
+        if(dot < 0)
+          fIn.vertices.push_back(ix);
+        else if(!discard)
+          fOut.vertices.push_back(ix);
         last = cur;
         ldot = dot;
       }
@@ -93,29 +101,39 @@ public:
         std::cout << ix << ' ';
       std::cout << "}\n";
       std::cout << "adding { ";
-      for(auto ix : f1.vertices)
+      for(auto ix : fIn.vertices)
         std::cout << ix << ' ';
       std::cout << "}\n";
 #endif
-      nfaces.push_back(std::move(f1));
+      nfaces.push_back(std::move(fIn));
       if(!discard) {
 #ifdef DEBUG
         std::cout << "adding { ";
-        for(auto ix : f2.vertices)
+        for(auto ix : fOut.vertices)
           std::cout << ix << ' ';
         std::cout << "}\n";
 #endif
-        nfaces.push_back(std::move(f2));
+        nfaces.push_back(std::move(fOut));
       }
     }
-    n1 = convex_hull(n1);
+    nIn = convex_hull(nIn);
 #ifdef DEBUG
     std::cout << "adding { ";
-    for(auto ix : n1.vertices)
+    for(auto ix : nIn.vertices)
       std::cout << ix << ' ';
     std::cout << "}\n";
 #endif
-    nfaces.push_back(std::move(n1));
+    nfaces.push_back(std::move(nIn));
+    if(!discard) {
+      nOut = convex_hull(nOut);
+#ifdef DEBUG
+      std::cout << "adding { ";
+      for(auto ix : nOut.vertices)
+        std::cout << ix << ' ';
+      std::cout << "}\n";
+#endif
+      nfaces.push_back(std::move(nOut));
+    }
     swap(faces, nfaces);
   }
 
