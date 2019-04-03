@@ -10,10 +10,10 @@
 
 using std::size_t;
 using Index = uint16_t;
-using Vertex = glm::vec4;
+using Vertex = glm::vec3;
 
 struct Plane {
-  glm::vec4 normal;
+  glm::vec3 normal;
   float offset;
 
   friend float operator*(const Vertex& v, const Plane& p) {
@@ -23,7 +23,7 @@ struct Plane {
 
 struct Face {
   std::vector<Index> vertices;
-  glm::vec4 normal;
+  glm::vec3 normal;
 };
 
 class Mould {
@@ -36,13 +36,13 @@ public:
     for(float x = -1; x <= 1; x += 2)
     for(float y = -1; y <= 1; y += 2)
     for(float z = -1; z <= 1; z += 2)
-      vertices.push_back({size*x, size*y, size*z, 1});
-    faces.push_back({{0, 2, 3, 1}, {-1, 0, 0, 0}});
-    faces.push_back({{4, 5, 7, 6}, {1, 0, 0, 0}});
-    faces.push_back({{0, 1, 5, 4}, {0, -1, 0, 0}});
-    faces.push_back({{2, 6, 7, 3}, {0, 1, 0, 0}});
-    faces.push_back({{0, 4, 6, 2}, {0, 0, 1, 0}});
-    faces.push_back({{1, 3, 7, 5}, {0, 0, -1, 0}});
+      vertices.push_back({size*x, size*y, size*z});
+    faces.push_back({{0, 2, 3, 1}, {-1, 0, 0}});
+    faces.push_back({{4, 5, 7, 6}, {1, 0, 0}});
+    faces.push_back({{0, 1, 5, 4}, {0, -1, 0}});
+    faces.push_back({{2, 6, 7, 3}, {0, 1, 0}});
+    faces.push_back({{0, 4, 6, 2}, {0, 0, 1}});
+    faces.push_back({{1, 3, 7, 5}, {0, 0, -1}});
   }
 
   void cut(Plane p, bool discard = false) {
@@ -76,7 +76,7 @@ public:
         const Vertex *cur = &vertices[ix];
         float dot = *cur * p;
         if(ldot * dot < 0) {
-          glm::vec4 intersect = (dot * *last - ldot * *cur)/(dot - ldot);
+          auto intersect = (dot * *last - ldot * *cur)/(dot - ldot);
           auto [newIx, added] = find_or_append(std::move(intersect));
           f1.vertices.push_back(newIx);
           f2.vertices.push_back(newIx);
@@ -133,7 +133,6 @@ private:
 
   Face convex_hull(const Face& in) {
     Face out{};
-    glm::vec3 normal{in.normal};
     for(auto ix : in.vertices) {
 #ifdef DEBUG
       std::cout << ix << ": {"
@@ -150,12 +149,12 @@ private:
         continue;
       }
 
-      glm::vec3 vnew = glm::vec3{vertices[ix]};
+      auto vnew = vertices[ix];
       Index last = out.vertices.back();
-      glm::vec3 vlast = glm::vec3{vertices[last]};
+      auto vlast = vertices[last];
       for(auto cur : out.vertices) {
-        glm::vec3 vcur = glm::vec3{vertices[cur]};
-        if(dot(cross(vcur - vlast, vnew - vlast), normal) > 0) {
+        auto vcur = vertices[cur];
+        if(dot(cross(vcur - vlast, vnew - vlast), in.normal) > 0) {
           out.vertices.insert(std::find(begin(out.vertices), end(out.vertices), cur), ix);
           break;
         }

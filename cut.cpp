@@ -3,5 +3,5 @@
 
 int main() {
   Mould m{};
-  m.cut({{1, 0, 0, 0}, 0}, true);
+  m.cut({{1, 0, 0}, 0}, true);
 }
