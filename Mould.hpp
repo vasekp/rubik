@@ -105,49 +105,7 @@ public:
         nfaces.push_back(std::move(f2));
       }
     }
-    // fix the new face
-    {
-      constexpr float epsilon = 0.01;
-
-      Face nn1{};
-      // assert n1.size() >= 3
-      for(auto ix : n1) {
-#ifdef DEBUG
-        std::cout << ix << ": {"
-          << vertices[ix].coord.x << ", "
-          << vertices[ix].coord.y << ", "
-          << vertices[ix].coord.z << "}, {"
-          << vertices[ix].normal.x << ", "
-          << vertices[ix].normal.y << ", "
-          << vertices[ix].normal.z << "}\n";
-#endif
-        if(nn1.size() == 0) {
-          nn1.push_back(ix);
-          continue;
-        } else if(nn1.size() == 1) {
-          if(distance(vertices[nn1[0]].coord, vertices[ix].coord) > epsilon)
-            nn1.push_back(ix);
-          continue;
-        }
-
-        bool found;
-        glm::vec3 vnew = glm::vec3{vertices[ix].coord};
-        Index last = nn1.back();
-        glm::vec3 vlast = glm::vec3{vertices[last].coord};
-        for(auto cur : nn1) {
-          glm::vec3 vcur = glm::vec3{vertices[cur].coord};
-          if(dot(cross(vcur - vlast, vnew - vlast), glm::vec3{vertices[ix].normal}) > 0) {
-            nn1.insert(std::find(begin(nn1), end(nn1), cur), ix);
-            found = true;
-            break;
-          }
-          last = cur;
-          vlast = vcur;
-        }
-        // if(!found) remove_vx();
-      }
-      swap(n1, nn1);
-    }
+    n1 = convex_hull(n1);
 #ifdef DEBUG
     std::cout << "adding { ";
     for(auto ix : n1)
@@ -161,5 +119,47 @@ public:
   Index new_vertex(Vertex&& vx) {
     vertices.push_back(std::move(vx));
     return static_cast<Index>(vertices.size() - 1);
+  }
+
+  Face convex_hull(const Face& in) {
+    constexpr float epsilon = 0.01;
+
+    Face out{};
+    for(auto ix : in) {
+#ifdef DEBUG
+      std::cout << ix << ": {"
+        << vertices[ix].coord.x << ", "
+        << vertices[ix].coord.y << ", "
+        << vertices[ix].coord.z << "}, {"
+        << vertices[ix].normal.x << ", "
+        << vertices[ix].normal.y << ", "
+        << vertices[ix].normal.z << "}\n";
+#endif
+      if(out.size() == 0) {
+        out.push_back(ix);
+        continue;
+      } else if(out.size() == 1) {
+        if(distance(vertices[out[0]].coord, vertices[ix].coord) > epsilon)
+          out.push_back(ix);
+        continue;
+      }
+
+      bool found;
+      glm::vec3 vnew = glm::vec3{vertices[ix].coord};
+      Index last = out.back();
+      glm::vec3 vlast = glm::vec3{vertices[last].coord};
+      for(auto cur : out) {
+        glm::vec3 vcur = glm::vec3{vertices[cur].coord};
+        if(dot(cross(vcur - vlast, vnew - vlast), glm::vec3{vertices[ix].normal}) > 0) {
+          out.insert(std::find(begin(out), end(out), cur), ix);
+          found = true;
+          break;
+        }
+        last = cur;
+        vlast = vcur;
+      }
+      // if(!found) remove_vx();
+    }
+    return out;
   }
 };
