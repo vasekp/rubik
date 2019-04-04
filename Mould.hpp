@@ -32,6 +32,13 @@ struct Volume {
   std::vector<Face> faces;
 };
 
+struct ExtVolume {
+  std::vector<Vertex> vertex_coords;
+  std::vector<Face> ext_faces;
+  std::vector<Face> ext_edges;
+  std::vector<Face> ext_vertices;
+};
+
 class Mould {
   std::vector<Vertex> vertices;
   std::vector<Volume> volumes;
@@ -119,131 +126,130 @@ public:
     dump();
   }
 
-  /*void clip_edges(float dist = 0.1) {
-    std::vector<Vertex> nvertices{};
-    std::vector<Face> ext_faces{};
-    std::vector<Face> ext_edges{};
-    std::vector<Face> ext_vertices{};
+  std::vector<ExtVolume> get_volumes_clipped(float dist = 0.1) {
+    std::vector<ExtVolume> rvolumes{};
+    for(const auto& volume : volumes) {
+      const auto& faces = volume.faces;
+      std::vector<Vertex> nvertices{};
+      std::vector<Face> ext_faces{};
+      std::vector<Face> ext_edges{};
+      std::vector<Face> ext_vertices{};
 
-    size_t nvcount = 0;
-    for(const auto& f : faces)
-      nvcount += f.vertices.size();
-    nvertices.reserve(nvcount);
-    ext_faces.reserve(faces.size());
-    ext_edges.reserve(nvcount);
-    ext_vertices.resize(vertices.size());
+      size_t nvcount = 0;
+      for(const auto& f : faces)
+        nvcount += f.vertices.size();
+      nvertices.reserve(nvcount);
+      ext_faces.reserve(faces.size());
+      ext_edges.reserve(nvcount);
+      ext_vertices.resize(vertices.size());
 
-    // copy faces, blow up vertices
-    // each face gets a unique set of new vertices
-    // new vertex indices predictable
-    for(const auto& f : faces) {
-      size_t base = nvertices.size();
-      //size_t size = f.vertices.size();
-      size_t newIx = base;
-      std::vector<Index> newIxs{};
-      for(auto ix : f.vertices) {
-        nvertices.push_back(vertices[ix]); // new element @ newIx
-        ext_vertices[ix].vertices.push_back(newIx);
-        ext_vertices[ix].normal += f.normal;
-        newIxs.push_back(newIx++);
+      // copy faces, blow up vertices
+      // each face gets a unique set of new vertices
+      // new vertex indices predictable
+      for(const auto& f : faces) {
+        size_t base = nvertices.size();
+        //size_t size = f.vertices.size();
+        size_t newIx = base;
+        std::vector<Index> newIxs{};
+        for(auto ix : f.vertices) {
+          nvertices.push_back(vertices[ix]); // new element @ newIx
+          ext_vertices[ix].vertices.push_back(newIx);
+          ext_vertices[ix].normal += f.normal;
+          newIxs.push_back(newIx++);
+        }
+        ext_faces.push_back({newIxs, f.normal});
       }
-      ext_faces.push_back({newIxs, f.normal});
-    }
 
-    // find coincident edges, make edge faces
-    for(size_t fc = faces.size(), fi1 = 0; fi1 < fc; fi1++) {
-      const auto& f1 = faces[fi1];
-      size_t vc1 = f1.vertices.size();
-      for(size_t vi1 = 0; vi1 < vc1; vi1++) {
-        size_t vj1 = (vi1 + 1) % vc1;
-        Index vix1 = f1.vertices[vi1],
-              vjx1 = f1.vertices[vj1];
-        bool found = false;
-        // [find vi1->vj1 edge in another face]
-        for(size_t fi2 = fi1 + 1; !found && fi2 < fc; fi2++) {
-          const auto& f2 = faces[fi2];
-          size_t vc2 = f2.vertices.size();
-          for(size_t vi2 = 0; vi2 < vc2; vi2++) {
-            size_t vj2 = (vi2 + 1) % vc2;
-            Index vix2 = f2.vertices[vi2],
-                  vjx2 = f2.vertices[vj2];
-            // must be oriented opposite
-            if(vix1 == vjx2 && vix2 == vjx1) {
-              // edge found!
-              found = true;
+      // find coincident edges, make edge faces
+      for(size_t fc = faces.size(), fi1 = 0; fi1 < fc; fi1++) {
+        const auto& f1 = faces[fi1];
+        size_t vc1 = f1.vertices.size();
+        for(size_t vi1 = 0; vi1 < vc1; vi1++) {
+          size_t vj1 = (vi1 + 1) % vc1;
+          Index vix1 = f1.vertices[vi1],
+                vjx1 = f1.vertices[vj1];
+          bool found = false;
+          // [find vi1->vj1 edge in another face]
+          for(size_t fi2 = fi1 + 1; !found && fi2 < fc; fi2++) {
+            const auto& f2 = faces[fi2];
+            size_t vc2 = f2.vertices.size();
+            for(size_t vi2 = 0; vi2 < vc2; vi2++) {
+              size_t vj2 = (vi2 + 1) % vc2;
+              Index vix2 = f2.vertices[vi2],
+                    vjx2 = f2.vertices[vj2];
+              // must be oriented opposite
+              if(vix1 == vjx2 && vix2 == vjx1) {
+                // edge found!
+                found = true;
 #ifdef DEBUG
-              std::cout << 'f' << fi1 << " i" << vi1 << " j" << vj1 <<
-                " = f" << fi2 << " i" << vi2 << " j" << vj2 << '\n';
+                std::cout << 'f' << fi1 << " i" << vi1 << " j" << vj1 <<
+                  " = f" << fi2 << " i" << vi2 << " j" << vj2 << '\n';
 #endif
-              // vi1, vj1 indices within f1 = faces[fi1]
-              // vi2, vj2 indices within f2 = faces[fi2]
-              // we need to reindex to nvertices, i.e., take vector indices from ext_faces
-              std::vector<Index> edge_ixs = {
-                ext_faces[fi1].vertices[vj1],
-                ext_faces[fi1].vertices[vi1],
-                ext_faces[fi2].vertices[vj2],
-                ext_faces[fi2].vertices[vi2]
-              };
-              ext_edges.push_back({edge_ixs, f1.normal + f2.normal});
-              break;
-            } // found
-          } // vi2
-        } // fi2
-      } // vi1
-    } // fi1
+                // vi1, vj1 indices within f1 = faces[fi1]
+                // vi2, vj2 indices within f2 = faces[fi2]
+                // we need to reindex to nvertices, i.e., take vector indices from ext_faces
+                std::vector<Index> edge_ixs = {
+                  ext_faces[fi1].vertices[vj1],
+                  ext_faces[fi1].vertices[vi1],
+                  ext_faces[fi2].vertices[vj2],
+                  ext_faces[fi2].vertices[vi2]
+                };
+                ext_edges.push_back({edge_ixs, f1.normal + f2.normal});
+                break;
+              } // found
+            } // vi2
+          } // fi2
+        } // vi1
+      } // fi1
 
-    // shrink all new faces (affecting nvertices referenced from all structures)
-    for(const auto& f : ext_faces) {
-      auto& normal = f.normal;
-      size_t size = f.vertices.size();
-      auto* vprev = &nvertices[f.vertices.back()];
-      auto* vthis = &nvertices[f.vertices.front()];
-      std::vector<Vertex> shrunk(size);
-      for(size_t i = 0; i < size; i++) {
-        auto* vnext = &nvertices[f.vertices[(i + 1) % size]];
-        auto dprev = normalize(*vthis - *vprev);
-        auto dnext = normalize(*vnext - *vthis);
-        auto cross = glm::cross(dprev, normal);
-        auto triple = dot(dnext, cross);
+      // shrink all new faces (affecting nvertices referenced from all structures)
+      for(const auto& f : ext_faces) {
+        auto& normal = f.normal;
+        size_t size = f.vertices.size();
+        auto* vprev = &nvertices[f.vertices.back()];
+        auto* vthis = &nvertices[f.vertices.front()];
+        std::vector<Vertex> shrunk(size);
+        for(size_t i = 0; i < size; i++) {
+          auto* vnext = &nvertices[f.vertices[(i + 1) % size]];
+          auto dprev = normalize(*vthis - *vprev);
+          auto dnext = normalize(*vnext - *vthis);
+          auto cross = glm::cross(dprev, normal);
+          auto triple = dot(dnext, cross);
 #ifdef DEBUG
-        std::cout << "Vertex " << f.vertices[i] << ": "
-          << "|dprev| = " << length(dprev)
-          << ", |dnext| = " << length(dnext)
-          << ", |cross| = " << length(cross)
-          << ", triple = " << triple << '\n';
+          std::cout << "Vertex " << f.vertices[i] << ": "
+            << "|dprev| = " << length(dprev)
+            << ", |dnext| = " << length(dnext)
+            << ", |cross| = " << length(cross)
+            << ", triple = " << triple << '\n';
 #endif
-        shrunk[i] = *vthis + dist * cross - triple * dist / (1 + dot(dprev, dnext)) * dprev;
-        vprev = vthis;
-        vthis = vnext;
+          shrunk[i] = *vthis + dist * cross - triple * dist / (1 + dot(dprev, dnext)) * dprev;
+          vprev = vthis;
+          vthis = vnext;
+        }
+        // safe to overwrite now
+        for(size_t i = 0; i < size; i++) {
+#ifdef DEBUG
+          std::cout << "Vertex " << f.vertices[i] << " shrunk by "
+            << distance(nvertices[f.vertices[i]], shrunk[i]) << '\n';
+#endif
+          nvertices[f.vertices[i]] = shrunk[i];
+        }
       }
-      // safe to overwrite now
-      for(size_t i = 0; i < size; i++) {
-#ifdef DEBUG
-        std::cout << "Vertex " << f.vertices[i] << " shrunk by "
-          << distance(nvertices[f.vertices[i]], shrunk[i]) << '\n';
-#endif
-        nvertices[f.vertices[i]] = shrunk[i];
+
+      // fix all new faces
+      swap(vertices, nvertices);
+      for(auto& f : ext_edges)
+        f.normal = normalize(f.normal);
+        // ext edge faces already CCW by construction
+      for(auto& f : ext_vertices) {
+        f.normal = normalize(f.normal);
+        f = sort_ccw(f);
       }
-    }
 
-    // fix all new faces
-    swap(vertices, nvertices);
-    for(auto& f : ext_edges)
-      f.normal = normalize(f.normal);
-      // ext edge faces already CCW by construction
-    for(auto& f : ext_vertices) {
-      f.normal = normalize(f.normal);
-      f = sort_ccw(f);
+      rvolumes.push_back({std::move(nvertices), std::move(ext_faces), std::move(ext_edges), std::move(ext_vertices)});
     }
-
-    faces.resize(0);
-    faces.reserve(ext_faces.size() + ext_edges.size() + ext_vertices.size());
-    using MoveIter = std::move_iterator<decltype(begin(faces))>;
-    std::copy(MoveIter(begin(ext_faces)), MoveIter(end(ext_faces)), std::back_inserter(faces));
-    std::copy(MoveIter(begin(ext_vertices)), MoveIter(end(ext_vertices)), std::back_inserter(faces));
-    std::copy(MoveIter(begin(ext_edges)), MoveIter(end(ext_edges)), std::back_inserter(faces));
-    dump();
-  }*/
+    return rvolumes;
+  }
 
 private:
   constexpr static float epsilon = 0.01;
