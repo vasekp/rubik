@@ -226,6 +226,7 @@ public:
     }
 
     // sort all new faces CCW
+    swap(vertices, nvertices);
     for(auto& f : ext_edges) {
       f.normal = normalize(f.normal);
       f = sort_ccw(f);
@@ -235,7 +236,6 @@ public:
       f = sort_ccw(f);
     }
 
-    swap(vertices, nvertices);
     faces.resize(0);
     faces.reserve(ext_faces.size() + ext_edges.size() + ext_vertices.size());
     using MoveIter = std::move_iterator<decltype(begin(faces))>;
@@ -303,7 +303,7 @@ private:
         out.vertices.push_back(ix);
         continue;
       } else if(out.vertices.size() == 1) {
-        if(distance(vertices[out.vertices.front()], vertices[ix]) > epsilon)
+        if(distance(vertices[out.vertices[0]], vertices[ix]) > epsilon)
           out.vertices.push_back(ix);
         continue;
       }
@@ -364,7 +364,10 @@ private:
       std::cout << "{ ";
       for(auto ix : f.vertices)
         std::cout << ix << ' ';
-      std::cout << "}\n";
+      std::cout << "} n {"
+        << f.normal.x << ", "
+        << f.normal.y << ", "
+        << f.normal.z << "}\n";
     }
 #endif
   }
