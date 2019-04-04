@@ -53,7 +53,10 @@ public:
     for(auto& f : faces) {
       unsigned c1 = 0, c2 = 0;
       for(auto ix : f.vertices)
-        (vertices[ix] * p < 0 ? c1 : c2)++;
+        if(Vertex vx = vertices[ix]; vx * p < 0)
+          c1++;
+        else if(vx * p > 0)
+          c2++;
       // c1: count inside, c2: count outside (in +ve direction of the normal)
 #ifdef DEBUG
       std::cout << "- " << c1 << " + " << c2 << '\n';
@@ -82,16 +85,22 @@ public:
           fIn.vertices.push_back(newIx);
           if(!discard)
             fOut.vertices.push_back(newIx);
-          if(added) { // TODO: will not cause problems?
-            nIn.vertices.push_back(newIx);
-            if(!discard)
-              nOut.vertices.push_back(newIx);
-          }
+          nIn.vertices.push_back(newIx);
+          if(!discard)
+            nOut.vertices.push_back(newIx);
         }
         if(dot < 0)
           fIn.vertices.push_back(ix);
-        else if(!discard)
-          fOut.vertices.push_back(ix);
+        else {
+          if(dot == 0) {
+            fIn.vertices.push_back(ix);
+            nIn.vertices.push_back(ix);
+          }
+          if(!discard) {
+            fOut.vertices.push_back(ix);
+            nOut.vertices.push_back(ix);
+          }
+        }
         last = cur;
         ldot = dot;
       }
@@ -146,18 +155,19 @@ private:
         return {&vy - &vertices[0], false};
     // else
     vertices.push_back(std::move(vx));
-    return {static_cast<Index>(vertices.size() - 1), true};
+    Index ix = static_cast<Index>(vertices.size() - 1);
+#ifdef DEBUG
+    std::cout << ix << ": {"
+      << vertices[ix].x << ", "
+      << vertices[ix].y << ", "
+      << vertices[ix].z << "}\n";
+#endif
+    return {ix, true};
   }
 
   Face convex_hull(const Face& in) {
     Face out{};
     for(auto ix : in.vertices) {
-#ifdef DEBUG
-      std::cout << ix << ": {"
-        << vertices[ix].x << ", "
-        << vertices[ix].y << ", "
-        << vertices[ix].z << "}\n";
-#endif
       if(out.vertices.size() == 0) {
         out.vertices.push_back(ix);
         continue;
