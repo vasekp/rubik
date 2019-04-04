@@ -28,9 +28,13 @@ struct Face {
   glm::vec3 normal;
 };
 
+struct Volume {
+  std::vector<Face> faces;
+};
+
 class Mould {
   std::vector<Vertex> vertices;
-  std::vector<Face> faces;
+  std::vector<Volume> volumes;
 
 public:
 
@@ -39,87 +43,83 @@ public:
     for(float y = -1; y <= 1; y += 2)
     for(float z = -1; z <= 1; z += 2)
       vertices.push_back({size*x, size*y, size*z});
+    std::vector<Face> faces{};
     faces.push_back({{0, 2, 3, 1}, {-1, 0, 0}});
     faces.push_back({{4, 5, 7, 6}, {1, 0, 0}});
     faces.push_back({{0, 1, 5, 4}, {0, -1, 0}});
     faces.push_back({{2, 6, 7, 3}, {0, 1, 0}});
     faces.push_back({{0, 4, 6, 2}, {0, 0, 1}});
     faces.push_back({{1, 3, 7, 5}, {0, 0, -1}});
+    volumes.push_back({std::move(faces)});
   }
 
   void cut(Plane p, bool discard = false) {
-    std::vector<Face> nfaces{};
-    Face nIn{}, nOut{};
-    nIn.normal = p.normal;
-    nOut.normal = -p.normal;
-    for(auto& f : faces) {
-      unsigned cIn = 0, cOut = 0;
-      for(auto ix : f.vertices)
-        if(Vertex vx = vertices[ix]; vx * p < 0)
-          cIn++;
-        else if(vx * p > 0)
-          cOut++;
-#ifdef DEBUG
-      std::cout << "- " << cIn << " + " << cOut << '\n';
-#endif
+    std::vector<Volume> nvolumes{};
+    for(auto& volume : volumes) {
+      Volume volIn{}, volOut{};
+      std::vector<Face> facesIn{}, facesOut{};
+      Face nIn{}, nOut{};
+      nIn.normal = p.normal;
+      nOut.normal = -p.normal;
+      for(auto& f : volume.faces) {
+        unsigned cIn = 0, cOut = 0;
+        for(auto ix : f.vertices)
+          if(Vertex vx = vertices[ix]; vx * p < 0)
+            cIn++;
+          else if(vx * p > 0)
+            cOut++;
 
-      if(cOut == 0)
-        keep_face(nfaces, std::move(f));
-      if(cIn == 0) {
-        if(!discard)
-          keep_face(nfaces, std::move(f));
-        else
-          drop_face(f);
-      }
-      if(cIn == 0 || cOut == 0)
-        continue;
+        if(cOut == 0)
+          volIn.faces.push_back(std::move(f));
+        if(cIn == 0)
+          volOut.faces.push_back(std::move(f));
+        if(cIn == 0 || cOut == 0)
+          continue;
 
-      Face fIn{}, fOut{};
-      fIn.normal = f.normal;
-      fOut.normal = f.normal;
-      const Vertex *last = &vertices[f.vertices.back()];
-      float ldot = *last * p;
-      for(auto ix : f.vertices) {
-        const Vertex *cur = &vertices[ix];
-        float dot = *cur * p;
-        if(ldot * dot < 0) {
-          auto intersect = (dot * *last - ldot * *cur)/(dot - ldot);
-          auto [newIx, added] = find_or_append(std::move(intersect));
-          fIn.vertices.push_back(newIx);
-          nIn.vertices.push_back(newIx);
-          if(!discard) {
+        Face fIn{}, fOut{};
+        fIn.normal = f.normal;
+        fOut.normal = f.normal;
+        const Vertex *last = &vertices[f.vertices.back()];
+        float ldot = *last * p;
+        for(auto ix : f.vertices) {
+          const Vertex *cur = &vertices[ix];
+          float dot = *cur * p;
+          if(ldot * dot < 0) {
+            auto intersect = (dot * *last - ldot * *cur)/(dot - ldot);
+            auto [newIx, added] = find_or_append(std::move(intersect));
+            fIn.vertices.push_back(newIx);
+            nIn.vertices.push_back(newIx);
             fOut.vertices.push_back(newIx);
             nOut.vertices.push_back(newIx);
           }
-        }
-        else if(dot == 0) {
-          fIn.vertices.push_back(ix);
-          nIn.vertices.push_back(ix);
-          if(!discard) {
+          else if(dot == 0) {
+            fIn.vertices.push_back(ix);
+            nIn.vertices.push_back(ix);
             fOut.vertices.push_back(ix);
             nOut.vertices.push_back(ix);
           }
+          if(dot < 0)
+            fIn.vertices.push_back(ix);
+          else if(dot > 0)
+            fOut.vertices.push_back(ix);
+          last = cur;
+          ldot = dot;
         }
-        if(dot < 0)
-          fIn.vertices.push_back(ix);
-        else if(dot > 0 && !discard)
-          fOut.vertices.push_back(ix);
-        last = cur;
-        ldot = dot;
+        volIn.faces.push_back(std::move(fIn));
+        volOut.faces.push_back(std::move(fOut));
       }
-      drop_face(std::move(f));
-      add_face(nfaces, std::move(fIn));
+      volIn.faces.push_back(sort_ccw(nIn));
+      volOut.faces.push_back(sort_ccw(nOut));
+      nvolumes.push_back(std::move(volIn));
       if(!discard)
-        add_face(nfaces, std::move(fOut));
+        nvolumes.push_back(std::move(volOut));
     }
-    add_face(nfaces, sort_ccw(nIn));
-    if(!discard)
-      add_face(nfaces, sort_ccw(nOut));
-    swap(faces, nfaces);
+    swap(volumes, nvolumes);
     cleanup();
+    dump();
   }
 
-  void clip_edges(float dist = 0.1) {
+  /*void clip_edges(float dist = 0.1) {
     std::vector<Vertex> nvertices{};
     std::vector<Face> ext_faces{};
     std::vector<Face> ext_edges{};
@@ -243,42 +243,10 @@ public:
     std::copy(MoveIter(begin(ext_vertices)), MoveIter(end(ext_vertices)), std::back_inserter(faces));
     std::copy(MoveIter(begin(ext_edges)), MoveIter(end(ext_edges)), std::back_inserter(faces));
     dump();
-  }
+  }*/
 
 private:
   constexpr static float epsilon = 0.01;
-
-  void add_face(std::vector<Face>& nfaces, Face&& face) {
-#ifdef DEBUG
-    std::cout << "adding { ";
-    for(auto ix : face.vertices)
-      std::cout << ix << ' ';
-    std::cout << "}\n";
-#endif
-    nfaces.push_back(std::move(face));
-  }
-
-  // no-op (we just don't add it), but useful for debugging
-#ifdef DEBUG
-  void drop_face(const Face& face) {
-    std::cout << "dropping { ";
-    for(auto ix : face.vertices)
-      std::cout << ix << ' ';
-    std::cout << "}\n";
-  }
-#else
-  void drop_face(const Face&) { }
-#endif
-
-  void keep_face(std::vector<Face>& nfaces, Face&& face) {
-#ifdef DEBUG
-    std::cout << "keeping { ";
-    for(auto ix : face.vertices)
-      std::cout << ix << ' ';
-    std::cout << "}\n";
-#endif
-    nfaces.push_back(std::move(face));
-  }
 
   std::pair<Index, bool> find_or_append(Vertex&& vx) {
     for(const auto& vy : vertices)
@@ -288,7 +256,7 @@ private:
     vertices.push_back(std::move(vx));
     Index ix = static_cast<Index>(vertices.size() - 1);
 #ifdef DEBUG
-    std::cout << ix << ": {"
+    std::cout << "Adding " << ix << ": {"
       << vertices[ix].x << ", "
       << vertices[ix].y << ", "
       << vertices[ix].z << "}\n";
@@ -326,10 +294,20 @@ private:
   }
 
   void cleanup() {
-    std::vector<bool> used(faces.size(), false);
-    for(const auto& f : faces)
-      for(auto ix : f.vertices)
-        used[ix] = true;
+    for(auto& v : volumes)
+      v.faces.erase(std::remove_if(begin(v.faces), end(v.faces),
+          [](const Face& f) -> bool { return f.vertices.empty(); }),
+        v.faces.end());
+
+    volumes.erase(std::remove_if(begin(volumes), end(volumes),
+        [](const Volume& v) -> bool { return v.faces.empty(); }),
+      volumes.end());
+
+    std::vector<bool> used(vertices.size(), false);
+    for(const auto& v : volumes)
+      for(const auto& f : v.faces)
+        for(auto ix : f.vertices)
+          used[ix] = true;
     std::map<Index, Index> map{};
     size_t removed = 0;
     for(size_t i = 0, j = 0; j < vertices.size(); i++, j++) {
@@ -346,28 +324,32 @@ private:
     if(removed == 0)
       return;
     vertices.resize(vertices.size() - removed);
-    for(auto& f : faces)
-      for(auto& ix : f.vertices)
-        ix = map[ix];
-    dump();
+    for(auto& v : volumes)
+      for(auto& f : v.faces)
+        for(auto& ix : f.vertices)
+          ix = map[ix];
   }
 
   void dump() {
 #ifdef DEBUG
+    std::cout << " === \n";
     for(Index ix = 0; ix < vertices.size(); ix++) {
       std::cout << ix << ": {"
         << vertices[ix].x << ", "
         << vertices[ix].y << ", "
         << vertices[ix].z << "}\n";
     }
-    for(const auto& f : faces) {
-      std::cout << "{ ";
-      for(auto ix : f.vertices)
-        std::cout << ix << ' ';
-      std::cout << "} n {"
-        << f.normal.x << ", "
-        << f.normal.y << ", "
-        << f.normal.z << "}\n";
+    for(const auto& v : volumes) {
+      std::cout << "Volume:\n";
+      for(const auto& f : v.faces) {
+        std::cout << "{ ";
+        for(auto ix : f.vertices)
+          std::cout << ix << ' ';
+        std::cout << "} n {"
+          << f.normal.x << ", "
+          << f.normal.y << ", "
+          << f.normal.z << "}\n";
+      }
     }
 #endif
   }
