@@ -167,7 +167,8 @@ public:
             size_t vj2 = (vi2 + 1) % vc2;
             Index vix2 = f2.vertices[vi2],
                   vjx2 = f2.vertices[vj2];
-            if((vix1 == vix2 && vjx1 == vjx2) || (vix1 == vjx2 && vix2 == vjx1)) {
+            // must be oriented opposite
+            if(vix1 == vjx2 && vix2 == vjx1) {
               // edge found!
               found = true;
 #ifdef DEBUG
@@ -178,10 +179,10 @@ public:
               // vi2, vj2 indices within f2 = faces[fi2]
               // we need to reindex to nvertices, i.e., take vector indices from ext_faces
               std::vector<Index> edge_ixs = {
-                ext_faces[fi1].vertices[vi1],
                 ext_faces[fi1].vertices[vj1],
-                ext_faces[fi2].vertices[vi2],
-                ext_faces[fi2].vertices[vj2]
+                ext_faces[fi1].vertices[vi1],
+                ext_faces[fi2].vertices[vj2],
+                ext_faces[fi2].vertices[vi2]
               };
               ext_edges.push_back({edge_ixs, f1.normal + f2.normal});
               break;
@@ -225,12 +226,11 @@ public:
       }
     }
 
-    // sort all new faces CCW
+    // fix all new faces
     swap(vertices, nvertices);
-    for(auto& f : ext_edges) {
+    for(auto& f : ext_edges)
       f.normal = normalize(f.normal);
-      f = sort_ccw(f);
-    }
+      // ext edge faces already CCW by construction
     for(auto& f : ext_vertices) {
       f.normal = normalize(f.normal);
       f = sort_ccw(f);
