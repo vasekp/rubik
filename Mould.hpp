@@ -1,6 +1,7 @@
 #include <cstddef> // size_t
 #include <cstdint> // uint16_t
 #include <vector>
+#include <map>
 #include <algorithm>
 #include <glm/glm.hpp>
 
@@ -112,6 +113,7 @@ public:
     if(!discard)
       add_face(nfaces, convex_hull(nOut));
     swap(faces, nfaces);
+    cleanup();
   }
 
 private:
@@ -190,5 +192,47 @@ private:
     }
     out.normal = in.normal;
     return out;
+  }
+
+  void cleanup() {
+    std::vector<bool> used(faces.size(), false);
+    for(const auto& f : faces)
+      for(auto ix : f.vertices)
+        used[ix] = true;
+    std::map<Index, Index> map{};
+    size_t removed = 0;
+    for(size_t i = 0, j = 0; j < vertices.size(); i++, j++) {
+      while(!used[j]) {
+#ifdef DEBUG
+        std::cout << "Freeing vertex " << j << '\n';
+#endif
+        j++;
+        removed++;
+      }
+      std::swap(vertices[i], vertices[j]);
+      map[j] = i;
+    }
+    if(removed == 0)
+      return;
+    vertices.resize(vertices.size() - removed);
+#ifdef DEBUG
+    for(Index ix = 0; ix < vertices.size(); ix++) {
+      std::cout << ix << ": {"
+        << vertices[ix].x << ", "
+        << vertices[ix].y << ", "
+        << vertices[ix].z << "}\n";
+    }
+#endif
+    for(auto& f : faces)
+      for(auto& ix : f.vertices)
+        ix = map[ix];
+#ifdef DEBUG
+    for(const auto& f : faces) {
+      std::cout << "{ ";
+      for(auto ix : f.vertices)
+        std::cout << ix << ' ';
+      std::cout << "}\n";
+    }
+#endif
   }
 };
