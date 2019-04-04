@@ -55,8 +55,8 @@ public:
     faces.push_back({{4, 5, 7, 6}, {1, 0, 0}});
     faces.push_back({{0, 1, 5, 4}, {0, -1, 0}});
     faces.push_back({{2, 6, 7, 3}, {0, 1, 0}});
-    faces.push_back({{0, 4, 6, 2}, {0, 0, 1}});
-    faces.push_back({{1, 3, 7, 5}, {0, 0, -1}});
+    faces.push_back({{0, 4, 6, 2}, {0, 0, -1}});
+    faces.push_back({{1, 3, 7, 5}, {0, 0, 1}});
     volumes.push_back({std::move(faces)});
   }
 
@@ -133,7 +133,7 @@ public:
       std::vector<Vertex> nvertices{};
       std::vector<Face> ext_faces{};
       std::vector<Face> ext_edges{};
-      std::vector<Face> ext_vertices{};
+      std::map<Index, Face> ext_vertices{};
 
       size_t nvcount = 0;
       for(const auto& f : faces)
@@ -141,7 +141,6 @@ public:
       nvertices.reserve(nvcount);
       ext_faces.reserve(faces.size());
       ext_edges.reserve(nvcount);
-      ext_vertices.resize(vertices.size());
 
       // copy faces, blow up vertices
       // each face gets a unique set of new vertices
@@ -237,16 +236,22 @@ public:
       }
 
       // fix all new faces
-      swap(vertices, nvertices);
+      swap(vertices, nvertices); // TODO remove
       for(auto& f : ext_edges)
         f.normal = normalize(f.normal);
         // ext edge faces already CCW by construction
-      for(auto& f : ext_vertices) {
+      for(auto& [ix, f] : ext_vertices) {
         f.normal = normalize(f.normal);
         f = sort_ccw(f);
       }
 
-      rvolumes.push_back({std::move(nvertices), std::move(ext_faces), std::move(ext_edges), std::move(ext_vertices)});
+      std::vector<Face> ext_vertices_v{};
+      ext_vertices_v.reserve(ext_vertices.size());
+      for(auto& [ix, f] : ext_vertices)
+        ext_vertices_v.push_back(std::move(f));
+
+      rvolumes.push_back({std::move(vertices), std::move(ext_faces), std::move(ext_edges), std::move(ext_vertices_v)});
+      swap(vertices, nvertices); // TODO remove
     }
     return rvolumes;
   }
