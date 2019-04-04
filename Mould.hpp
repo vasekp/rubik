@@ -51,28 +51,27 @@ public:
     nIn.normal = p.normal;
     nOut.normal = -p.normal;
     for(auto& f : faces) {
-      unsigned c1 = 0, c2 = 0;
+      unsigned cIn = 0, cOut = 0;
       for(auto ix : f.vertices)
         if(Vertex vx = vertices[ix]; vx * p < 0)
-          c1++;
+          cIn++;
         else if(vx * p > 0)
-          c2++;
-      // c1: count inside, c2: count outside (in +ve direction of the normal)
+          cOut++;
 #ifdef DEBUG
-      std::cout << "- " << c1 << " + " << c2 << '\n';
+      std::cout << "- " << cIn << " + " << cOut << '\n';
 #endif
-      if(c1 == 0 && discard) {
-#ifdef DEBUG
-        std::cout << "dropping { ";
-        for(auto ix : f.vertices)
-          std::cout << ix << ' ';
-        std::cout << "}\n";
-#endif
-        continue;
-      } else if(c1 == 0 || c2 == 0) {
-        nfaces.push_back(std::move(f));
-        continue;
+
+      if(cOut == 0)
+        keep_face(nfaces, std::move(f));
+      if(cIn == 0) {
+        if(!discard)
+          keep_face(nfaces, std::move(f));
+        else
+          drop_face(f);
       }
+      if(cIn == 0 || cOut == 0)
+        continue;
+
       Face fIn{}, fOut{};
       const Vertex *last = &vertices[f.vertices.back()];
       float ldot = *last * p;
@@ -83,71 +82,70 @@ public:
           auto intersect = (dot * *last - ldot * *cur)/(dot - ldot);
           auto [newIx, added] = find_or_append(std::move(intersect));
           fIn.vertices.push_back(newIx);
-          if(!discard)
-            fOut.vertices.push_back(newIx);
           nIn.vertices.push_back(newIx);
-          if(!discard)
+          if(!discard) {
+            fOut.vertices.push_back(newIx);
             nOut.vertices.push_back(newIx);
-        }
-        if(dot < 0)
-          fIn.vertices.push_back(ix);
-        else {
-          if(dot == 0) {
-            fIn.vertices.push_back(ix);
-            nIn.vertices.push_back(ix);
           }
+        }
+        else if(dot == 0) {
+          fIn.vertices.push_back(ix);
+          nIn.vertices.push_back(ix);
           if(!discard) {
             fOut.vertices.push_back(ix);
             nOut.vertices.push_back(ix);
           }
         }
+        if(dot < 0)
+          fIn.vertices.push_back(ix);
+        else if(dot > 0 && !discard)
+          fOut.vertices.push_back(ix);
         last = cur;
         ldot = dot;
       }
-#ifdef DEBUG
-      std::cout << "dropping { ";
-      for(auto ix : f.vertices)
-        std::cout << ix << ' ';
-      std::cout << "}\n";
-      std::cout << "adding { ";
-      for(auto ix : fIn.vertices)
-        std::cout << ix << ' ';
-      std::cout << "}\n";
-#endif
-      nfaces.push_back(std::move(fIn));
-      if(!discard) {
-#ifdef DEBUG
-        std::cout << "adding { ";
-        for(auto ix : fOut.vertices)
-          std::cout << ix << ' ';
-        std::cout << "}\n";
-#endif
-        nfaces.push_back(std::move(fOut));
-      }
+      drop_face(std::move(f));
+      add_face(nfaces, std::move(fIn));
+      if(!discard)
+        add_face(nfaces, std::move(fOut));
     }
-    nIn = convex_hull(nIn);
-#ifdef DEBUG
-    std::cout << "adding { ";
-    for(auto ix : nIn.vertices)
-      std::cout << ix << ' ';
-    std::cout << "}\n";
-#endif
-    nfaces.push_back(std::move(nIn));
-    if(!discard) {
-      nOut = convex_hull(nOut);
-#ifdef DEBUG
-      std::cout << "adding { ";
-      for(auto ix : nOut.vertices)
-        std::cout << ix << ' ';
-      std::cout << "}\n";
-#endif
-      nfaces.push_back(std::move(nOut));
-    }
+    add_face(nfaces, convex_hull(nIn));
+    if(!discard)
+      add_face(nfaces, convex_hull(nOut));
     swap(faces, nfaces);
   }
 
 private:
   constexpr static float epsilon = 0.01;
+
+  void add_face(std::vector<Face>& nfaces, Face&& face) {
+#ifdef DEBUG
+    std::cout << "adding { ";
+    for(auto ix : face.vertices)
+      std::cout << ix << ' ';
+    std::cout << "}\n";
+#endif
+    nfaces.push_back(std::move(face));
+  }
+
+  // no-op (we just don't add it), but useful for debugging
+  void drop_face(const Face& face) {
+#ifdef DEBUG
+    std::cout << "dropping { ";
+    for(auto ix : face.vertices)
+      std::cout << ix << ' ';
+    std::cout << "}\n";
+#endif
+  }
+
+  void keep_face(std::vector<Face>& nfaces, Face&& face) {
+#ifdef DEBUG
+    std::cout << "keeping { ";
+    for(auto ix : face.vertices)
+      std::cout << ix << ' ';
+    std::cout << "}\n";
+#endif
+    nfaces.push_back(std::move(face));
+  }
 
   std::pair<Index, bool> find_or_append(Vertex&& vx) {
     for(const auto& vy : vertices)
