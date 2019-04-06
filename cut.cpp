@@ -2,13 +2,12 @@
 #include <iostream>
 #include "Mould.hpp"
 #include "GLutil.hpp"
-#include <GL/freeglut.h>
+#include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace globals {
-  int window;
   GLuint vao_model;
   GLutil::program prog_model;
   GLuint all_matrices;
@@ -57,7 +56,7 @@ struct Cut {
   Index tag;
 };
 
-void draw_cb() {
+void draw(GLFWwindow* window) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glm::mat4 modelview = glm::rotate(
       glm::rotate(
@@ -87,11 +86,13 @@ void draw_cb() {
     glDrawElements(GL_TRIANGLES, globals::counts[i], GL_UNSIGNED_SHORT, globals::starts[i]);
   }
 
-  glutSwapBuffers();
+  glfwSwapBuffers(window);
   globals::time += 0.005;
 }
 
-void resize_cb(int w, int h) {
+void resize_cb(GLFWwindow* window, int w, int h) {
+  if(w == 0 && h == 0)
+    glfwGetFramebufferSize(window, &w, &h);
   glViewport(0, 0, w, h);
   float ratio = (float)w / h;
   glm::mat4 proj{
@@ -100,11 +101,6 @@ void resize_cb(int w, int h) {
     {0, 0, .1, .2},
     {0, 0, 0, 1}};
   glProgramUniformMatrix4fv(globals::prog_model, uniforms_model::PROJ, 1, GL_FALSE, glm::value_ptr(proj));
-}
-
-void key_cb(unsigned char key, int, int) {
-  if(key == 'q')
-    glutDestroyWindow(globals::window);
 }
 
 void append_face_list(std::vector<Index>& indices, size_t base, const std::vector<Face>& faces) {
@@ -122,18 +118,25 @@ void append_face_list(std::vector<Index>& indices, size_t base, const std::vecto
   }
 }
 
-void init_glut(int &argc, char *argv[]) {
-  glutInit(&argc, argv);
-  glutInitContextVersion(4, 5);
-  glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH | GLUT_RGBA);
-  glutInitWindowSize(640, 480);
-  glutInitWindowPosition(100, 100);
-  globals::window = glutCreateWindow("Title");
-  glutDisplayFunc(draw_cb);
-  glutIdleFunc(glutPostRedisplay);
-  glutReshapeFunc(resize_cb);
-  glutKeyboardFunc(key_cb);
+void key_cb(GLFWwindow *window, unsigned key) {
+  if(key == 'q')
+    glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
+
+GLFWwindow* init_glfw() {
+  if(!glfwInit())
+    throw std::runtime_error("glfwInit failed\n");;
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+  GLFWwindow* window = glfwCreateWindow(640, 480, "Title", NULL, NULL);
+  if(!window)
+    throw std::runtime_error("glfwCreateWindow failed");
+  glfwSetCharCallback(window, &key_cb);
+  glfwSetFramebufferSizeCallback(window, &resize_cb);
+  glfwMakeContextCurrent(window);
+  return window;
+}
+
 
 void init_program() {
   globals::prog_model = GLutil::program{
@@ -363,7 +366,7 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   glClearColor(0, 0, 0, 1);
 }
 
-int main(int argc, char *argv[]) {
+int main() {
   constexpr unsigned tex_cubemap = 0;
 
   std::vector<Cut> shape_cuts{
@@ -395,7 +398,7 @@ int main(int argc, char *argv[]) {
   };
 
   try {
-    init_glut(argc, argv);
+    GLFWwindow* window = init_glfw();
     GLutil::initGLEW();
     init_program();
     Volume shape = init_shape(2, shape_cuts);
@@ -406,9 +409,14 @@ int main(int argc, char *argv[]) {
     glCullFace(GL_BACK);
     glEnable(GL_DEPTH_TEST);
 
-    glutMainLoop();
+    resize_cb(window, 0, 0);
+    while(!glfwWindowShouldClose(window)) {
+      draw(window);
+      glfwPollEvents();
+    }
   } catch(const std::runtime_error& e) {
     std::cout.flush();
     std::cerr << e.what() << '\n';
   }
+  glfwTerminate();
 }
