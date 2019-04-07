@@ -3,6 +3,9 @@
 #include "Mould.hpp"
 #include "GLutil.hpp"
 #include <GL/freeglut.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 int win;
 size_t count;
@@ -11,13 +14,29 @@ void draw_cb() {
   static float time;
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_SHORT, nullptr);
-  glUniform1f(0, time);
+  glm::mat4 modelview = glm::rotate(
+      glm::rotate(
+        glm::scale(
+          glm::translate(
+            glm::mat4{},
+            glm::vec3(0, 0, 3)),
+          glm::vec3(.5)),
+        0.2f, glm::vec3{1, 0, 0}),
+      -time, glm::vec3{0, 1, 0});
+  glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(modelview));
   time += 0.01;
   glutSwapBuffers();
 }
 
 void resize_cb(int w, int h) {
   glViewport(0, 0, w, h);
+  float ratio = (float)w / h;
+  glm::mat4 proj{
+    {w > h ? 1/ratio : 1, 0, 0, 0},
+    {0, w < h ? ratio : 1, 0, 0},
+    {0, 0, .1, .2},
+    {0, 0, 0, 1}};
+  glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(proj));
 }
 
 void key_cb(unsigned char key, int, int) {
