@@ -32,9 +32,10 @@ void draw_cb() {
             glm::mat4{},
             glm::vec3(0, 0, 3)),
           glm::vec3(.5)),
-        0.2f, glm::vec3{1, 0, 0}),
+        -0.3f, glm::vec3{1, 0, 0}),
       -time, glm::vec3{0, 1, 0});
   glUseProgram(globals::prog_model);
+  glBindVertexArray(globals::vao_model);
   glUniformMatrix4fv(uniforms_model::MODELVIEW, 1, GL_FALSE, glm::value_ptr(modelview));
   glDrawElements(GL_TRIANGLES, globals::model_size, GL_UNSIGNED_SHORT, nullptr);
   glutSwapBuffers();
@@ -184,15 +185,19 @@ void init_cubemap(unsigned texUnit) {
       GL_TEXTURE_CUBE_MAP_NEGATIVE_X})
     glTexImage2D(face, 0, GL_RGBA, texSize, texSize, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 
+  GLutil::program prog_texgen{
+    GLutil::shader{"texgen.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
+    GLutil::shader{"texgen.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file},
+    GLutil::shader{"texgen.geom", GL_GEOMETRY_SHADER, GLutil::shader::from_file}};
+
+  GLuint vao_texgen;
+  glGenVertexArrays(1, &vao_texgen);
+  glBindVertexArray(vao_texgen);
+
   glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture, 0);
-
-  glClearColor(.5, 1, 0, 1);
-  glClear(GL_COLOR_BUFFER_BIT);
-
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X, texture, 0);
-
-  glClearColor(1, 1, 0, 1);
-  glClear(GL_COLOR_BUFFER_BIT);
+  glViewport(0, 0, texSize, texSize);
+  glUseProgram(prog_texgen);
+  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
   glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
   glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
