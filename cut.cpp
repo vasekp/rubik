@@ -7,13 +7,23 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-int win;
-size_t count;
+namespace globals {
+  int window;
+  size_t model_size;
+  GLuint vao_model;
+  GLutil::program prog_model;
+}
+
+namespace uniforms_model {
+  enum {
+    MODELVIEW,
+    PROJ
+  };
+}
 
 void draw_cb() {
   static float time;
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_SHORT, nullptr);
   glm::mat4 modelview = glm::rotate(
       glm::rotate(
         glm::scale(
@@ -23,9 +33,11 @@ void draw_cb() {
           glm::vec3(.5)),
         0.2f, glm::vec3{1, 0, 0}),
       -time, glm::vec3{0, 1, 0});
-  glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(modelview));
-  time += 0.01;
+  glUseProgram(globals::prog_model);
+  glUniformMatrix4fv(uniforms_model::MODELVIEW, 1, GL_FALSE, glm::value_ptr(modelview));
+  glDrawElements(GL_TRIANGLES, globals::model_size, GL_UNSIGNED_SHORT, nullptr);
   glutSwapBuffers();
+  time += 0.01;
 }
 
 void resize_cb(int w, int h) {
@@ -36,12 +48,12 @@ void resize_cb(int w, int h) {
     {0, w < h ? ratio : 1, 0, 0},
     {0, 0, .1, .2},
     {0, 0, 0, 1}};
-  glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(proj));
+  glProgramUniformMatrix4fv(globals::prog_model, uniforms_model::PROJ, 1, GL_FALSE, glm::value_ptr(proj));
 }
 
 void key_cb(unsigned char key, int, int) {
   if(key == 'q')
-    glutDestroyWindow(win);
+    glutDestroyWindow(globals::window);
 }
 
 void append_face_list(std::vector<Index>& indices, size_t base, const std::vector<Face>& faces) {
@@ -59,7 +71,26 @@ void append_face_list(std::vector<Index>& indices, size_t base, const std::vecto
   }
 }
 
-int main(int argc, char *argv[]) {
+void init_glut(int &argc, char *argv[]) {
+  glutInit(&argc, argv);
+  glutInitContextVersion(4, 5);
+  glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH | GLUT_RGBA);
+  glutInitWindowSize(640, 480);
+  glutInitWindowPosition(100, 100);
+  globals::window = glutCreateWindow("Title");
+  glutDisplayFunc(draw_cb);
+  glutIdleFunc(glutPostRedisplay);
+  glutReshapeFunc(resize_cb);
+  glutKeyboardFunc(key_cb);
+}
+
+void init_program() {
+  globals::prog_model = GLutil::program{
+    GLutil::shader{"cut.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
+    GLutil::shader{"cut.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
+}
+
+void init_model() {
   Mould m{};
   m.cut({glm::normalize(glm::vec3{1, 1, 1}), 0}, false);
   m.cut({glm::normalize(glm::vec3{-1, 1, 1}), 0}, false);
@@ -105,46 +136,34 @@ int main(int argc, char *argv[]) {
   std::cout << "]\n";
 #endif
 
+  glGenVertexArrays(1, &globals::vao_model);
+  glBindVertexArray(globals::vao_model);
+
+  GLuint vbo;
+  glGenBuffers(1, &vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, coords.size() * sizeof(coords[0]), coords.data(), GL_STATIC_DRAW);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
+
+  glGenBuffers(1, &vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(normals[0]), normals.data(), GL_STATIC_DRAW);
+  glEnableVertexAttribArray(1);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
+
+  glGenBuffers(1, &vbo);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
+  globals::model_size = indices.size();
+}
+
+int main(int argc, char *argv[]) {
   try {
-    glutInit(&argc, argv);
-    glutInitContextVersion(4, 5);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH | GLUT_RGBA);
-    glutInitWindowSize(640, 480);
-    glutInitWindowPosition(100, 100);
-    win = glutCreateWindow("Title");
-
+    init_glut(argc, argv);
     GLutil::initGLEW();
-    glutDisplayFunc(draw_cb);
-    glutIdleFunc(glutPostRedisplay);
-    glutReshapeFunc(resize_cb);
-    glutKeyboardFunc(key_cb);
-
-    GLutil::program program{
-      GLutil::shader{"cut.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
-      GLutil::shader{"cut.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
-    glUseProgram(program);
-
-    GLuint vao;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-
-    GLuint vbo;
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, coords.size() * sizeof(coords[0]), coords.data(), GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
-
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(normals[0]), normals.data(), GL_STATIC_DRAW);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
-
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
-    count = indices.size();
+    init_program();
+    init_model();
 
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);

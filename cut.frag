@@ -1,8 +1,7 @@
 #version 450 core
 
-in vec4 normal;
-
 in vec4 pos;
+in vec4 normal;
 out vec4 color;
 
 const float ambient_int = 0.2;
