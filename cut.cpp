@@ -22,6 +22,13 @@ namespace uniforms_model {
   };
 }
 
+namespace uniforms_texgen {
+  enum {
+    NORMAL,
+    OFFSET
+  };
+}
+
 void draw_cb() {
   static float time;
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -176,6 +183,7 @@ void init_cubemap(unsigned texUnit) {
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_LOD_BIAS, -1);
   for(GLenum face : {
       GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
       GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
@@ -190,20 +198,56 @@ void init_cubemap(unsigned texUnit) {
     GLutil::shader{"texgen.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file},
     GLutil::shader{"texgen.geom", GL_GEOMETRY_SHADER, GLutil::shader::from_file}};
 
+  float coords[][3] = {
+    {-1, -1, -1}, {-1, -1, 1}, {-1, 1, -1}, {-1, 1, 1},
+    {1, -1, -1}, {1, -1, 1}, {1, 1, -1}, {1, 1, 1}
+  };
+
+  GLubyte indices[][3] = {
+    {0, 1, 3}, {0, 3, 2},
+    {4, 5, 7}, {4, 7, 6},
+    {0, 1, 5}, {0, 5, 4},
+    {2, 3, 7}, {2, 7, 6},
+    {0, 2, 6}, {0, 6, 4},
+    {1, 3, 7}, {1, 7, 5}};
+
   GLuint vao_texgen;
   glGenVertexArrays(1, &vao_texgen);
   glBindVertexArray(vao_texgen);
 
+  GLuint vbo;
+  glGenBuffers(1, &vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(coords), &coords[0][0], GL_STATIC_DRAW);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
+
+  glGenBuffers(1, &vbo);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), &indices[0][0], GL_STATIC_DRAW);
+
   glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture, 0);
   glViewport(0, 0, texSize, texSize);
   glUseProgram(prog_texgen);
-  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+  glClearColor(1, 1, 1, 1);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glEnable(GL_BLEND);
+  glBlendEquation(GL_MIN);
+
+  for(auto& normal : {glm::normalize(glm::vec3{1, 1, 1}), glm::normalize(glm::vec3{-1, 1, 1}), glm::normalize(glm::vec3{-1, 1, -1}), glm::normalize(glm::vec3{1, 1, -1})}) {
+    glUniform3fv(uniforms_texgen::NORMAL, 1, glm::value_ptr(normal));
+    glUniform1f(uniforms_texgen::OFFSET, 0);
+    glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(indices[0][0]), GL_UNSIGNED_BYTE, nullptr);
+  }
 
   glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
   glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
 
   // reset to sensible state
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glBlendEquation(GL_FUNC_ADD);
+  glDisable(GL_BLEND);
   glClearColor(0, 0, 0, 1);
 }
 

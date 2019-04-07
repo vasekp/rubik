@@ -7,7 +7,7 @@ in vec3 texCoord;
 in vec4 normal;
 out vec4 color;
 
-const float ambient_int = 0.2;
+const float ambient_int = 0.8;
 const vec4 light_dir = normalize(vec4(3, 3, -10, 0));
 const float shininess = 5;
 const float mix_specular = 0.3;
