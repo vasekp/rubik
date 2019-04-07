@@ -17,7 +17,8 @@ namespace globals {
 namespace uniforms_model {
   enum {
     MODELVIEW,
-    PROJ
+    PROJ,
+    TEXTURE
   };
 }
 
@@ -158,12 +159,58 @@ void init_model() {
   globals::model_size = indices.size();
 }
 
+void init_cubemap(unsigned texUnit) {
+  GLuint framebuffer;
+  glGenFramebuffers(1, &framebuffer);
+  glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+  constexpr GLuint texSize = 512;
+  glViewport(0, 0, texSize, texSize);
+
+  GLuint texture;
+  glGenTextures(1, &texture);
+  glActiveTexture(GL_TEXTURE0 + texUnit);
+  glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  for(GLenum face : {
+      GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+      GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
+      GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+      GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+      GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+      GL_TEXTURE_CUBE_MAP_NEGATIVE_X})
+    glTexImage2D(face, 0, GL_RGBA, texSize, texSize, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+
+  glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture, 0);
+
+  glClearColor(.5, 1, 0, 1);
+  glClear(GL_COLOR_BUFFER_BIT);
+
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X, texture, 0);
+
+  glClearColor(1, 1, 0, 1);
+  glClear(GL_COLOR_BUFFER_BIT);
+
+  glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
+  glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+
+  // reset to sensible state
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glClearColor(0, 0, 0, 1);
+}
+
 int main(int argc, char *argv[]) {
   try {
     init_glut(argc, argv);
     GLutil::initGLEW();
     init_program();
     init_model();
+    constexpr unsigned tex_cubemap = 0;
+    init_cubemap(tex_cubemap);
+    glProgramUniform1i(globals::prog_model, uniforms_model::TEXTURE, tex_cubemap);
 
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
