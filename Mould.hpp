@@ -65,6 +65,12 @@ public:
     Face nIn{p.normal}, nOut{-p.normal};
 
     for(auto& f : faces) {
+#ifdef DEBUG
+      std::cout << "Face [ ";
+      for(auto ix : f.indices)
+        std::cout << ix << ' ';
+      std::cout << "]: ";
+#endif
       {
         unsigned cIn = 0, cOut = 0;
         for(auto ix : f.indices)
@@ -74,25 +80,34 @@ public:
             cOut++;
 
         if(cOut == 0) { // whole face in
+#ifdef DEBUG
+          std::cout << "keep\n";
+#endif
           volIn.faces.push_back(std::move(f));
           continue;
         }
         if(cIn == 0) {  // whole face out
+#ifdef DEBUG
+          std::cout << "drop\n";
+#endif
           volOut.faces.push_back(std::move(f));
           continue;
         }
       }
 
       // face actually cut by the plane
+#ifdef DEBUG
+      std::cout << "split\n";
+#endif
 
       Face fIn{f.normal}, fOut{f.normal};
-      const Vertex *last = &vertices[f.indices.back()];
-      float ldot = *last * p;
+      Vertex last = vertices[f.indices.back()];
+      float ldot = last * p;
       for(auto ix : f.indices) {
-        const Vertex *cur = &vertices[ix];
-        float dot = *cur * p;
+        Vertex cur = vertices[ix];
+        float dot = cur * p;
         if(ldot * dot < 0) {  // the edge intersects the plane
-          auto intersect = (dot * *last - ldot * *cur)/(dot - ldot);
+          auto intersect = (dot * last - ldot * cur)/(dot - ldot);
           auto newIx = find_or_append(intersect);
           fIn.indices.push_back(newIx);
           nIn.indices.push_back(newIx);
