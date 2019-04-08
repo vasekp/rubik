@@ -67,9 +67,9 @@ void key_cb(unsigned char key, int, int) {
 
 void append_face_list(std::vector<Index>& indices, size_t base, const std::vector<Face>& faces) {
   for(const auto& face : faces) {
-    Index first = face.vertices[0];
-    Index prev = face.vertices[1];
-    for(auto ix : face.vertices) {
+    Index first = face.indices[0];
+    Index prev = face.indices[1];
+    for(auto ix : face.indices) {
       if(ix == first || ix == prev)
         continue;
       indices.push_back(base + first);
@@ -116,11 +116,11 @@ void init_model() {
       vx_total += volume.vertex_coords.size();
       face_count += volume.ext_faces.size() + volume.ext_edges.size() + volume.ext_vertices.size();
       for(const auto& face : volume.ext_faces)
-        ix_total += (face.vertices.size() - 2)*3;
+        ix_total += (face.indices.size() - 2)*3;
       for(const auto& face : volume.ext_edges)
-        ix_total += (face.vertices.size() - 2)*3;
+        ix_total += (face.indices.size() - 2)*3;
       for(const auto& face : volume.ext_vertices)
-        ix_total += (face.vertices.size() - 2)*3;
+        ix_total += (face.indices.size() - 2)*3;
     }
     coords.reserve(vx_total);
     normals.reserve(vx_total);
@@ -132,7 +132,7 @@ void init_model() {
     std::copy(MoveIter(begin(volume.vertex_coords)), MoveIter(end(volume.vertex_coords)),
         std::back_inserter(coords));
     for(const auto& face : volume.ext_faces)
-      std::fill_n(std::back_inserter(normals), face.vertices.size(), face.normal);
+      std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
     append_face_list(indices, base, volume.ext_faces);
     append_face_list(indices, base, volume.ext_edges);
     append_face_list(indices, base, volume.ext_vertices);

@@ -24,7 +24,7 @@ struct Plane {
 };
 
 struct Face {
-  std::vector<Index> vertices;
+  std::vector<Index> indices;
   glm::vec3 normal;
 };
 
@@ -70,7 +70,7 @@ public:
       nOut.normal = -p.normal;
       for(auto& f : volume.faces) {
         unsigned cIn = 0, cOut = 0;
-        for(auto ix : f.vertices)
+        for(auto ix : f.indices)
           if(Vertex vx = vertices[ix]; vx * p < 0)
             cIn++;
           else if(vx * p > 0)
@@ -86,29 +86,29 @@ public:
         Face fIn{}, fOut{};
         fIn.normal = f.normal;
         fOut.normal = f.normal;
-        const Vertex *last = &vertices[f.vertices.back()];
+        const Vertex *last = &vertices[f.indices.back()];
         float ldot = *last * p;
-        for(auto ix : f.vertices) {
+        for(auto ix : f.indices) {
           const Vertex *cur = &vertices[ix];
           float dot = *cur * p;
           if(ldot * dot < 0) {
             auto intersect = (dot * *last - ldot * *cur)/(dot - ldot);
             auto [newIx, added] = find_or_append(std::move(intersect));
-            fIn.vertices.push_back(newIx);
-            nIn.vertices.push_back(newIx);
-            fOut.vertices.push_back(newIx);
-            nOut.vertices.push_back(newIx);
+            fIn.indices.push_back(newIx);
+            nIn.indices.push_back(newIx);
+            fOut.indices.push_back(newIx);
+            nOut.indices.push_back(newIx);
           }
           else if(dot == 0) {
-            fIn.vertices.push_back(ix);
-            nIn.vertices.push_back(ix);
-            fOut.vertices.push_back(ix);
-            nOut.vertices.push_back(ix);
+            fIn.indices.push_back(ix);
+            nIn.indices.push_back(ix);
+            fOut.indices.push_back(ix);
+            nOut.indices.push_back(ix);
           }
           if(dot < 0)
-            fIn.vertices.push_back(ix);
+            fIn.indices.push_back(ix);
           else if(dot > 0)
-            fOut.vertices.push_back(ix);
+            fOut.indices.push_back(ix);
           last = cur;
           ldot = dot;
         }
@@ -137,7 +137,7 @@ public:
 
       size_t nvcount = 0;
       for(const auto& f : faces)
-        nvcount += f.vertices.size();
+        nvcount += f.indices.size();
       nvertices.reserve(nvcount);
       ext_faces.reserve(faces.size());
       ext_edges.reserve(nvcount);
@@ -147,12 +147,11 @@ public:
       // new vertex indices predictable
       for(const auto& f : faces) {
         size_t base = nvertices.size();
-        //size_t size = f.vertices.size();
         size_t newIx = base;
         std::vector<Index> newIxs{};
-        for(auto ix : f.vertices) {
+        for(auto ix : f.indices) {
           nvertices.push_back(vertices[ix]); // new element @ newIx
-          ext_vertices[ix].vertices.push_back(newIx);
+          ext_vertices[ix].indices.push_back(newIx);
           ext_vertices[ix].normal += f.normal;
           newIxs.push_back(newIx++);
         }
@@ -162,20 +161,20 @@ public:
       // find coincident edges, make edge faces
       for(size_t fc = faces.size(), fi1 = 0; fi1 < fc; fi1++) {
         const auto& f1 = faces[fi1];
-        size_t vc1 = f1.vertices.size();
+        size_t vc1 = f1.indices.size();
         for(size_t vi1 = 0; vi1 < vc1; vi1++) {
           size_t vj1 = (vi1 + 1) % vc1;
-          Index vix1 = f1.vertices[vi1],
-                vjx1 = f1.vertices[vj1];
+          Index vix1 = f1.indices[vi1],
+                vjx1 = f1.indices[vj1];
           bool found = false;
           // [find vi1->vj1 edge in another face]
           for(size_t fi2 = fi1 + 1; !found && fi2 < fc; fi2++) {
             const auto& f2 = faces[fi2];
-            size_t vc2 = f2.vertices.size();
+            size_t vc2 = f2.indices.size();
             for(size_t vi2 = 0; vi2 < vc2; vi2++) {
               size_t vj2 = (vi2 + 1) % vc2;
-              Index vix2 = f2.vertices[vi2],
-                    vjx2 = f2.vertices[vj2];
+              Index vix2 = f2.indices[vi2],
+                    vjx2 = f2.indices[vj2];
               // must be oriented opposite
               if(vix1 == vjx2 && vix2 == vjx1) {
                 // edge found!
@@ -188,10 +187,10 @@ public:
                 // vi2, vj2 indices within f2 = faces[fi2]
                 // we need to reindex to nvertices, i.e., take vector indices from ext_faces
                 std::vector<Index> edge_ixs = {
-                  ext_faces[fi1].vertices[vj1],
-                  ext_faces[fi1].vertices[vi1],
-                  ext_faces[fi2].vertices[vj2],
-                  ext_faces[fi2].vertices[vi2]
+                  ext_faces[fi1].indices[vj1],
+                  ext_faces[fi1].indices[vi1],
+                  ext_faces[fi2].indices[vj2],
+                  ext_faces[fi2].indices[vi2]
                 };
                 ext_edges.push_back({edge_ixs, f1.normal + f2.normal});
                 break;
@@ -204,18 +203,18 @@ public:
       // shrink all new faces (affecting nvertices referenced from all structures)
       for(const auto& f : ext_faces) {
         auto& normal = f.normal;
-        size_t size = f.vertices.size();
-        auto* vprev = &nvertices[f.vertices.back()];
-        auto* vthis = &nvertices[f.vertices.front()];
+        size_t size = f.indices.size();
+        auto* vprev = &nvertices[f.indices.back()];
+        auto* vthis = &nvertices[f.indices.front()];
         std::vector<Vertex> shrunk(size);
         for(size_t i = 0; i < size; i++) {
-          auto* vnext = &nvertices[f.vertices[(i + 1) % size]];
+          auto* vnext = &nvertices[f.indices[(i + 1) % size]];
           auto dprev = normalize(*vthis - *vprev);
           auto dnext = normalize(*vnext - *vthis);
           auto cross = glm::cross(dprev, normal);
           auto triple = dot(dnext, cross);
 #ifdef DEBUG
-          std::cout << "Vertex " << f.vertices[i] << ": "
+          std::cout << "Vertex " << f.indices[i] << ": "
             << "|dprev| = " << length(dprev)
             << ", |dnext| = " << length(dnext)
             << ", |cross| = " << length(cross)
@@ -228,10 +227,10 @@ public:
         // safe to overwrite now
         for(size_t i = 0; i < size; i++) {
 #ifdef DEBUG
-          std::cout << "Vertex " << f.vertices[i] << " shrunk by "
-            << distance(nvertices[f.vertices[i]], shrunk[i]) << '\n';
+          std::cout << "Vertex " << f.indices[i] << " shrunk by "
+            << distance(nvertices[f.indices[i]], shrunk[i]) << '\n';
 #endif
-          nvertices[f.vertices[i]] = shrunk[i];
+          nvertices[f.indices[i]] = shrunk[i];
         }
       }
 
@@ -277,23 +276,23 @@ private:
 
   Face sort_ccw(const Face& in) {
     Face out{};
-    for(auto ix : in.vertices) {
-      if(out.vertices.size() == 0) {
-        out.vertices.push_back(ix);
+    for(auto ix : in.indices) {
+      if(out.indices.size() == 0) {
+        out.indices.push_back(ix);
         continue;
-      } else if(out.vertices.size() == 1) {
-        if(distance(vertices[out.vertices[0]], vertices[ix]) > epsilon)
-          out.vertices.push_back(ix);
+      } else if(out.indices.size() == 1) {
+        if(distance(vertices[out.indices[0]], vertices[ix]) > epsilon)
+          out.indices.push_back(ix);
         continue;
       }
 
       auto vnew = vertices[ix];
-      Index last = out.vertices.back();
+      Index last = out.indices.back();
       auto vlast = vertices[last];
-      for(auto cur : out.vertices) {
+      for(auto cur : out.indices) {
         auto vcur = vertices[cur];
         if(dot(cross(vcur - vlast, vnew - vlast), in.normal) > 0) {
-          out.vertices.insert(std::find(begin(out.vertices), end(out.vertices), cur), ix);
+          out.indices.insert(std::find(begin(out.indices), end(out.indices), cur), ix);
           break;
         }
         last = cur;
@@ -307,7 +306,7 @@ private:
   void cleanup() {
     for(auto& v : volumes)
       v.faces.erase(std::remove_if(begin(v.faces), end(v.faces),
-          [](const Face& f) -> bool { return f.vertices.empty(); }),
+          [](const Face& f) -> bool { return f.indices.empty(); }),
         v.faces.end());
 
     volumes.erase(std::remove_if(begin(volumes), end(volumes),
@@ -317,7 +316,7 @@ private:
     std::vector<bool> used(vertices.size(), false);
     for(const auto& v : volumes)
       for(const auto& f : v.faces)
-        for(auto ix : f.vertices)
+        for(auto ix : f.indices)
           used[ix] = true;
     std::map<Index, Index> map{};
     size_t removed = 0;
@@ -337,7 +336,7 @@ private:
     vertices.resize(vertices.size() - removed);
     for(auto& v : volumes)
       for(auto& f : v.faces)
-        for(auto& ix : f.vertices)
+        for(auto& ix : f.indices)
           ix = map[ix];
   }
 
@@ -354,7 +353,7 @@ private:
       std::cout << "Volume:\n";
       for(const auto& f : v.faces) {
         std::cout << "{ ";
-        for(auto ix : f.vertices)
+        for(auto ix : f.indices)
           std::cout << ix << ' ';
         std::cout << "} n {"
           << f.normal.x << ", "
