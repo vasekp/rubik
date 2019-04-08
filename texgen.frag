@@ -7,7 +7,7 @@ in vec4 coords;
 out vec4 color;
 
 float cutoff(float q) {
-  return abs(q) < 0.03 ? 0.3 : 1;
+  return abs(q) < 0.05 ? 0.3 : 1;
 }
 
 void main() {

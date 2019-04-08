@@ -29,10 +29,10 @@ struct Face {
 
   Face() : indices{}, normal{} { }
   
-  Face(std::vector<Index> indices_, glm::vec3 normal_)  // TODO
-    : indices(std::move(indices_)), normal(std::move(normal_)) { }
+  Face(std::vector<Index> indices_, glm::vec3 normal_)
+    : indices(indices_), normal(normal_) { }
 
-  Face(glm::vec3 normal_) : normal(std::move(normal_)) { }
+  Face(glm::vec3 normal_) : normal(normal_) { }
 };
 
 class Volume {
