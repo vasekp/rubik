@@ -105,40 +105,24 @@ void init_model() {
   m.cut({glm::normalize(glm::vec3{-1, 1, 1}), 0}, false);
   m.cut({glm::normalize(glm::vec3{-1, 1, -1}), 0}, false);
   m.cut({glm::normalize(glm::vec3{1, 1, -1}), 0}, false);
-
-  auto volumes = m.get_volumes_clipped(0.05);
+  
   std::vector<glm::vec3> coords{};
   std::vector<glm::vec3> normals{};
   std::vector<Index> indices{};
-  {
-    size_t vx_total = 0, ix_total = 0, face_count = 0;
-    for(const auto& volume : volumes) {
-      vx_total += volume.vertex_coords.size();
-      face_count += volume.ext_faces.size() + volume.ext_edges.size() + volume.ext_vertices.size();
-      for(const auto& face : volume.ext_faces)
-        ix_total += (face.indices.size() - 2)*3;
-      for(const auto& face : volume.ext_edges)
-        ix_total += (face.indices.size() - 2)*3;
-      for(const auto& face : volume.ext_vertices)
-        ix_total += (face.indices.size() - 2)*3;
-    }
-    coords.reserve(vx_total);
-    normals.reserve(vx_total);
-    indices.reserve(ix_total);
-  }
-  for(auto& volume : volumes) {
-    using MoveIter = std::move_iterator<decltype(begin(volume.vertex_coords))>;
+
+  for(auto& volume : m.get_volumes()) {
+    ExtVolume ext(std::move(volume), 0.05);
+    using MoveIter = std::move_iterator<decltype(begin(ext.vertices))>;
     size_t base = coords.size();
-    std::copy(MoveIter(begin(volume.vertex_coords)), MoveIter(end(volume.vertex_coords)),
+    std::copy(MoveIter(begin(ext.vertices)), MoveIter(end(ext.vertices)),
         std::back_inserter(coords));
-    for(const auto& face : volume.ext_faces)
+    for(const auto& face : ext.faces)
       std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
-    append_face_list(indices, base, volume.ext_faces);
-    append_face_list(indices, base, volume.ext_edges);
-    append_face_list(indices, base, volume.ext_vertices);
+    append_face_list(indices, base, ext.faces);
+    append_face_list(indices, base, ext.ext_faces);
   }
 #ifdef DEBUG
-  std::cout << coords.size() << ' ' << normals.size() << ' ' << indices.size() << '\n';
+  std::cout << '\n' << coords.size() << ' ' << normals.size() << ' ' << indices.size() << '\n';
   std::cout << "[ ";
   for(auto ix : indices)
     std::cout << ix << ", ";
