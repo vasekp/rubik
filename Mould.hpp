@@ -19,7 +19,7 @@ struct Plane {
   float offset;
 
   Plane(const glm::vec3& normal_, float offset_)
-    : normal{normalize(normal_)}, offset(offset_ / length(normal_)) { }
+    : normal(normalize(normal_)), offset(offset_ / length(normal_)) { }
 
   friend float operator*(const Vertex& v, const Plane& p) {
     return dot(p.normal, v) - p.offset;
@@ -30,18 +30,32 @@ struct Face {
   std::vector<Index> indices;
   glm::vec3 normal;
 
-  Face() : indices{}, normal{} { }
-  
-  Face(std::vector<Index> indices_, glm::vec3 normal_)
-    : indices(indices_), normal(normal_) { }
+  Face(std::vector<Index>&& indices_, glm::vec3 normal_)
+    : indices(std::move(indices_)), normal(normal_) { }
 
-  Face(glm::vec3 normal_) : normal(normal_) { }
+  Face(glm::vec3 normal_ = {})
+    : Face({}, normal_) { }
 };
 
 class Volume {
 public:
   std::vector<Vertex> vertices;
   std::vector<Face> faces;
+
+  Volume() = default;
+
+  Volume(float size) {
+    for(float x = -1; x <= 1; x += 2)
+    for(float y = -1; y <= 1; y += 2)
+    for(float z = -1; z <= 1; z += 2)
+      vertices.push_back({size*x, size*y, size*z});
+    faces.push_back({{0, 2, 3, 1}, {-1, 0, 0}});
+    faces.push_back({{4, 5, 7, 6}, {1, 0, 0}});
+    faces.push_back({{0, 1, 5, 4}, {0, -1, 0}});
+    faces.push_back({{2, 6, 7, 3}, {0, 1, 0}});
+    faces.push_back({{0, 4, 6, 2}, {0, 0, -1}});
+    faces.push_back({{1, 3, 7, 5}, {0, 0, 1}});
+  }
 
   Volume cut(const Plane& p) {
     { // Simple cases
@@ -299,7 +313,7 @@ class ExtVolume : public Volume {
                 faces[fi2].indices[vj2],
                 faces[fi2].indices[vi2]
               };
-              ext_faces.push_back({edge_ixs, f1.normal + f2.normal});
+              ext_faces.push_back({std::move(edge_ixs), f1.normal + f2.normal});
               break;
             } // found
           } // vi2
@@ -362,22 +376,11 @@ class Mould {
 
 public:
 
-  Mould(float size = 2) {
-    Volume v{};
-    for(float x = -1; x <= 1; x += 2)
-    for(float y = -1; y <= 1; y += 2)
-    for(float z = -1; z <= 1; z += 2)
-      v.vertices.push_back({size*x, size*y, size*z});
-    v.faces.push_back({{0, 2, 3, 1}, {-1, 0, 0}});
-    v.faces.push_back({{4, 5, 7, 6}, {1, 0, 0}});
-    v.faces.push_back({{0, 1, 5, 4}, {0, -1, 0}});
-    v.faces.push_back({{2, 6, 7, 3}, {0, 1, 0}});
-    v.faces.push_back({{0, 4, 6, 2}, {0, 0, -1}});
-    v.faces.push_back({{1, 3, 7, 5}, {0, 0, 1}});
+  Mould(Volume v) {
     volumes.push_back(std::move(v));
   }
 
-  void cut(const Plane& p, bool discard = false) {
+  void cut(const Plane& p) {
 #ifdef DEBUG
     std::cout << "\nCUTTING\n";
 #endif
@@ -389,13 +392,11 @@ public:
       Volume outer = volume.cut(p);
       if(volume.empty())
         std::swap(volume, outer);
-      if(!discard && !outer.empty())
+      if(!outer.empty())
         nvolumes.push_back(std::move(outer));
     }
-    if(!discard) {
-      using MoveIter = std::move_iterator<decltype(begin(nvolumes))>;
-      std::copy(MoveIter{begin(nvolumes)}, MoveIter{end(nvolumes)}, std::back_inserter(volumes));
-    }
+    using MoveIter = std::move_iterator<decltype(begin(nvolumes))>;
+    std::copy(MoveIter{begin(nvolumes)}, MoveIter{end(nvolumes)}, std::back_inserter(volumes));
 #ifdef DEBUG
     for(const auto& v : volumes)
       v.dump();

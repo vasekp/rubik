@@ -99,16 +99,17 @@ void init_program() {
     GLutil::shader{"cut.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
 }
 
-Volume init_model(const std::vector<Plane>& shape_cuts, const std::vector<Plane>& cuts) {
-  Mould m{};
-
-  for(const auto& plane : shape_cuts)
-    m.cut(plane, true);
-
-  Volume main_volume = m.get_volumes().front();
-
+Volume init_shape(float size, const std::vector<Plane>& cuts) {
+  Volume shape{size};
   for(const auto& plane : cuts)
-    m.cut(plane, false);
+    shape.cut(plane);
+  return shape;
+}
+
+void init_model(const Volume& shape, const std::vector<Plane>& cuts) {
+  Mould m{shape};
+  for(const auto& plane : cuts)
+    m.cut(plane);
   
   std::vector<glm::vec3> coords{};
   std::vector<glm::vec3> normals{};
@@ -153,8 +154,6 @@ Volume init_model(const std::vector<Plane>& shape_cuts, const std::vector<Plane>
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
   globals::model_size = indices.size();
-
-  return main_volume;
 }
 
 void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector<Plane>& cuts) {
@@ -255,8 +254,9 @@ int main(int argc, char *argv[]) {
     init_glut(argc, argv);
     GLutil::initGLEW();
     init_program();
-    Volume main_volume = init_model(shape_cuts, cuts);
-    init_cubemap(tex_cubemap, main_volume, cuts);
+    Volume shape = init_shape(2, shape_cuts);
+    init_model(shape, cuts);
+    init_cubemap(tex_cubemap, shape, cuts);
 
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
