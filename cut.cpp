@@ -117,14 +117,13 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts) {
 
   for(auto& volume : m.get_volumes()) {
     ExtVolume ext(std::move(volume), 0.05);
-    using MoveIter = std::move_iterator<decltype(begin(ext.vertices))>;
     size_t base = coords.size();
-    std::copy(MoveIter(begin(ext.vertices)), MoveIter(end(ext.vertices)),
-        std::back_inserter(coords));
-    for(const auto& face : ext.faces)
+    const auto& vertices = ext.get_vertices();
+    std::copy(begin(vertices), end(vertices), std::back_inserter(coords));
+    for(const auto& face : ext.get_faces())
       std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
-    append_face_list(indices, base, ext.faces);
-    append_face_list(indices, base, ext.ext_faces);
+    append_face_list(indices, base, ext.get_faces());
+    append_face_list(indices, base, ext.get_ext_faces());
   }
 #ifdef DEBUG
   std::cout << '\n' << coords.size() << ' ' << normals.size() << ' ' << indices.size() << '\n';
@@ -190,7 +189,7 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   // main volume faces
 
   std::vector<Index> indices{};
-  append_face_list(indices, 0, main_volume.faces);
+  append_face_list(indices, 0, main_volume.get_faces());
 
   GLuint vao_texgen;
   glGenVertexArrays(1, &vao_texgen);
@@ -199,9 +198,9 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   GLuint vbo;
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glBufferData(GL_ARRAY_BUFFER, main_volume.vertices.size() * sizeof(Vertex), &main_volume.vertices[0], GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, main_volume.get_vertices().size() * sizeof(Vertex), &main_volume.get_vertices()[0], GL_STATIC_DRAW);
   glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(main_volume.vertices[0]), nullptr);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(main_volume.get_vertices()[0]), nullptr);
 
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo);

@@ -38,10 +38,11 @@ struct Face {
 };
 
 class Volume {
-public:
+protected:
   std::vector<Vertex> vertices;
   std::vector<Face> faces;
 
+public:
   Volume() = default;
 
   Volume(float size) {
@@ -56,6 +57,10 @@ public:
     faces.push_back({{0, 4, 6, 2}, {0, 0, -1}});
     faces.push_back({{1, 3, 7, 5}, {0, 0, 1}});
   }
+
+  const std::vector<Vertex>& get_vertices() const { return vertices; }
+
+  const std::vector<Face>& get_faces() const { return faces; }
 
   Volume cut(const Plane& p) {
     { // Simple cases
@@ -254,24 +259,27 @@ private:
 };
 
 class ExtVolume : public Volume {
-  public:
   std::vector<Face> ext_faces;
 
+public:
   ExtVolume(const Volume& orig, float dist) {
 #ifdef DEBUG
     std::cout << "\nEXT VOLUME\n";
 #endif
     std::map<Index, Face> ext_vertices{};
 
+    const auto& orig_vertices = orig.get_vertices();
+    const auto& orig_faces = orig.get_faces();
+
     // copy faces, blow up vertices
     // each face gets a unique set of new vertices
     // new vertex indices predictable
-    for(const auto& f : orig.faces) {
+    for(const auto& f : orig_faces) {
       size_t base = vertices.size();
       size_t newIx = base;
       std::vector<Index> newIxs{};
       for(auto ix : f.indices) {
-        vertices.push_back(orig.vertices[ix]); // new element @ newIx
+        vertices.push_back(orig_vertices[ix]); // new element @ newIx
         ext_vertices[ix].indices.push_back(newIx);
         ext_vertices[ix].normal += f.normal;
         newIxs.push_back(newIx++);
@@ -280,8 +288,8 @@ class ExtVolume : public Volume {
     }
 
     // find coincident edges, make edge faces
-    for(size_t fc = orig.faces.size(), fi1 = 0; fi1 < fc; fi1++) {
-      const auto& f1 = orig.faces[fi1];
+    for(size_t fc = orig_faces.size(), fi1 = 0; fi1 < fc; fi1++) {
+      const auto& f1 = orig_faces[fi1];
       size_t vc1 = f1.indices.size();
       for(size_t vi1 = 0; vi1 < vc1; vi1++) {
         size_t vj1 = (vi1 + 1) % vc1;
@@ -290,7 +298,7 @@ class ExtVolume : public Volume {
         bool found = false;
         // [find vi1->vj1 edge in another face]
         for(size_t fi2 = fi1 + 1; !found && fi2 < fc; fi2++) {
-          const auto& f2 = orig.faces[fi2];
+          const auto& f2 = orig_faces[fi2];
           size_t vc2 = f2.indices.size();
           for(size_t vi2 = 0; vi2 < vc2; vi2++) {
             size_t vj2 = (vi2 + 1) % vc2;
@@ -369,6 +377,8 @@ class ExtVolume : public Volume {
       << ext_faces.size() << " ext faces\n";
 #endif
   }
+
+  const std::vector<Face>& get_ext_faces() const { return ext_faces; }
 };
 
 class Mould {
@@ -395,8 +405,8 @@ public:
       if(!outer.empty())
         nvolumes.push_back(std::move(outer));
     }
-    using MoveIter = std::move_iterator<decltype(begin(nvolumes))>;
-    std::copy(MoveIter{begin(nvolumes)}, MoveIter{end(nvolumes)}, std::back_inserter(volumes));
+    std::copy(std::make_move_iterator(begin(nvolumes)), std::make_move_iterator(end(nvolumes)),
+        std::back_inserter(volumes));
 #ifdef DEBUG
     for(const auto& v : volumes)
       v.dump();
