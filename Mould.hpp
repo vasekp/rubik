@@ -18,6 +18,9 @@ struct Plane {
   glm::vec3 normal;
   float offset;
 
+  Plane(const glm::vec3& normal_, float offset_)
+    : normal{normalize(normal_)}, offset(offset_ / length(normal_)) { }
+
   friend float operator*(const Vertex& v, const Plane& p) {
     return dot(p.normal, v) - p.offset;
   }

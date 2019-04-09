@@ -241,15 +241,14 @@ int main(int argc, char *argv[]) {
   constexpr unsigned tex_cubemap = 0;
 
   std::vector<Plane> shape_cuts{
-    {glm::normalize(glm::vec3{0.1, 0, 1}), 1},
-    {glm::normalize(glm::vec3{1, 1, 1}), 0.3}
+    {{1, 1, 1}, 2}
   };
 
   std::vector<Plane> cuts{
-    {glm::normalize(glm::vec3{1, 1, 1}), 0},
-    {glm::normalize(glm::vec3{-1, 1, 1}), 0},
-    {glm::normalize(glm::vec3{-1, 1, -1}), 0},
-    {glm::normalize(glm::vec3{1, 1, -1}), 0}
+    {{1, 1, 1}, 0},
+    {{-1, 1, 1}, 0},
+    {{-1, 1, -1}, 0},
+    {{1, 1, -1}, 0}
   };
 
   try {
