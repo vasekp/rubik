@@ -22,10 +22,24 @@ namespace uniforms_model {
   };
 }
 
+namespace attribs_model {
+  enum {
+    COORDS,
+    NORMAL,
+    COLOUR
+  };
+}
+
 namespace uniforms_texgen {
   enum {
     NORMAL,
     OFFSET
+  };
+}
+
+namespace attribs_texgen {
+  enum {
+    COORDS
   };
 }
 
@@ -102,7 +116,7 @@ void init_program() {
 Volume init_shape(float size, const std::vector<Plane>& cuts) {
   Volume shape{size};
   for(const auto& plane : cuts)
-    shape.cut(plane);
+    shape.cut(plane, 1);
   return shape;
 }
 
@@ -113,15 +127,22 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts) {
   
   std::vector<glm::vec3> coords{};
   std::vector<glm::vec3> normals{};
+  std::vector<glm::vec4> colours{};
   std::vector<Index> indices{};
+
+  glm::vec4 col_vals[] = {
+    {1, 1, 1, 1},
+    {1, 1, 0, 1}};
 
   for(auto& volume : m.get_volumes()) {
     ExtVolume ext(std::move(volume), 0.05);
     size_t base = coords.size();
     const auto& vertices = ext.get_vertices();
     std::copy(begin(vertices), end(vertices), std::back_inserter(coords));
-    for(const auto& face : ext.get_faces())
+    for(const auto& face : ext.get_faces()) {
       std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
+      std::fill_n(std::back_inserter(colours), face.indices.size(), col_vals[face.tag]);
+    }
     append_face_list(indices, base, ext.get_faces());
     append_face_list(indices, base, ext.get_ext_faces());
   }
@@ -140,14 +161,20 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts) {
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, coords.size() * sizeof(coords[0]), coords.data(), GL_STATIC_DRAW);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
+  glEnableVertexAttribArray(attribs_model::COORDS);
+  glVertexAttribPointer(attribs_model::COORDS, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
 
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(normals[0]), normals.data(), GL_STATIC_DRAW);
-  glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
+  glEnableVertexAttribArray(attribs_model::NORMAL);
+  glVertexAttribPointer(attribs_model::NORMAL, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
+
+  glGenBuffers(1, &vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, colours.size() * sizeof(colours[0]), colours.data(), GL_STATIC_DRAW);
+  glEnableVertexAttribArray(attribs_model::COLOUR);
+  glVertexAttribPointer(attribs_model::COLOUR, 4, GL_FLOAT, GL_FALSE, sizeof(colours[0]), nullptr);
 
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo);
@@ -199,8 +226,8 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, main_volume.get_vertices().size() * sizeof(Vertex), &main_volume.get_vertices()[0], GL_STATIC_DRAW);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(main_volume.get_vertices()[0]), nullptr);
+  glEnableVertexAttribArray(attribs_texgen::COORDS);
+  glVertexAttribPointer(attribs_texgen::COORDS, 3, GL_FLOAT, GL_FALSE, sizeof(main_volume.get_vertices()[0]), nullptr);
 
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo);

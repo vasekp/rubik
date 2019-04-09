@@ -29,12 +29,15 @@ struct Plane {
 struct Face {
   std::vector<Index> indices;
   glm::vec3 normal;
+  Index tag;
 
-  Face(std::vector<Index>&& indices_, glm::vec3 normal_)
-    : indices(std::move(indices_)), normal(normal_) { }
+  Face(std::vector<Index>&& indices_, glm::vec3 normal_, Index tag_ = 0)
+    : indices(std::move(indices_)), normal(normal_), tag(tag_) { }
 
-  Face(glm::vec3 normal_ = {})
-    : Face({}, normal_) { }
+  Face(glm::vec3 normal_, Index tag_)
+    : Face({}, normal_, tag_) { }
+
+  Face() : Face({}, 0) { }
 };
 
 class Volume {
@@ -62,7 +65,7 @@ public:
 
   const std::vector<Face>& get_faces() const { return faces; }
 
-  Volume cut(const Plane& p) {
+  Volume cut(const Plane& p, Index tag = 0) {
     { // Simple cases
       unsigned cIn = 0, cOut = 0;
       for(const auto& vx : vertices)
@@ -84,7 +87,7 @@ public:
 
     Volume volIn{}, volOut{};
     std::vector<Face> facesIn{}, facesOut{};
-    Face nIn{p.normal}, nOut{-p.normal};
+    Face nIn{p.normal, tag}, nOut{-p.normal, tag};
 
     for(auto& f : faces) {
 #ifdef DEBUG
@@ -122,7 +125,7 @@ public:
       std::cout << "split\n";
 #endif
 
-      Face fIn{f.normal}, fOut{f.normal};
+      Face fIn{f.normal, f.tag}, fOut{f.normal, f.tag};
       Vertex last = vertices[f.indices.back()];
       float ldot = last * p;
       for(auto ix : f.indices) {
@@ -192,7 +195,7 @@ public:
 
 protected:
   Face sort_face(const Face& in) {
-    Face out{in.normal};
+    Face out{in.normal, in.tag};
     for(auto ix : in.indices) {
       if(out.indices.size() == 0) {
         out.indices.push_back(ix);
@@ -284,7 +287,7 @@ public:
         ext_vertices[ix].normal += f.normal;
         newIxs.push_back(newIx++);
       }
-      faces.push_back({std::move(newIxs), std::move(f.normal)});
+      faces.push_back({std::move(newIxs), f.normal, f.tag});
     }
 
     // find coincident edges, make edge faces
@@ -390,7 +393,7 @@ public:
     volumes.push_back(std::move(v));
   }
 
-  void cut(const Plane& p) {
+  void cut(const Plane& p, Index tag = 0) {
 #ifdef DEBUG
     std::cout << "\nCUTTING\n";
 #endif
@@ -399,7 +402,7 @@ public:
 #ifdef DEBUG
       std::cout << "[ vol ]\n";
 #endif
-      Volume outer = volume.cut(p);
+      Volume outer = volume.cut(p, tag);
       if(volume.empty())
         std::swap(volume, outer);
       if(!outer.empty())
