@@ -12,6 +12,7 @@ namespace globals {
   size_t model_size;
   GLuint vao_model;
   GLutil::program prog_model;
+  float time = 0;
 }
 
 namespace uniforms_model {
@@ -51,7 +52,6 @@ struct Cut {
 };
 
 void draw_cb() {
-  static float time = 3;
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glm::mat4 modelview = glm::rotate(
       glm::rotate(
@@ -61,13 +61,13 @@ void draw_cb() {
             glm::vec3(0, 0, 3)),
           glm::vec3(1)),
         -0.3f, glm::vec3{1, 0, 0}),
-      -time, glm::vec3{0, 1, 0});
+      -globals::time, glm::vec3{0, 1, 0});
   glUseProgram(globals::prog_model);
   glBindVertexArray(globals::vao_model);
   glUniformMatrix4fv(uniforms_model::MODELVIEW, 1, GL_FALSE, glm::value_ptr(modelview));
   glDrawElements(GL_TRIANGLES, globals::model_size, GL_UNSIGNED_SHORT, nullptr);
   glutSwapBuffers();
-  time += 0.01;
+  globals::time += 0.01;
 }
 
 void resize_cb(int w, int h) {
@@ -127,7 +127,7 @@ Volume init_shape(float size, const std::vector<Cut>& cuts) {
   return shape;
 }
 
-void init_model(const Volume& shape, const std::vector<Plane>& cuts) {
+void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::vector<glm::vec4>& colour_vals) {
   Mould m{shape};
   for(const auto& plane : cuts)
     m.cut(plane);
@@ -137,17 +137,6 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts) {
   std::vector<glm::vec4> colours{};
   std::vector<Index> indices{};
 
-  glm::vec4 col_vals[] = {
-    {0, 0, 0, 0},
-    {1, 0, 0, 1},
-    {0, 1, 0, 1},
-    {0, 0, 1, 1},
-    {1, 0, 0, 1},
-    {0, 1, 0, 1},
-    {0, 0, 1, 1},
-    {1, 1, 0, 1},
-  };
-
   for(auto& volume : m.get_volumes()) {
     ExtVolume ext(std::move(volume), 0.03);
     size_t base = coords.size();
@@ -155,7 +144,7 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts) {
     std::copy(begin(vertices), end(vertices), std::back_inserter(coords));
     for(const auto& face : ext.get_faces()) {
       std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
-      std::fill_n(std::back_inserter(colours), face.indices.size(), col_vals[face.tag]);
+      std::fill_n(std::back_inserter(colours), face.indices.size(), colour_vals[face.tag]);
     }
     append_face_list(indices, base, ext.get_faces());
     append_face_list(indices, base, ext.get_ext_faces());
@@ -171,27 +160,31 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts) {
   glGenVertexArrays(1, &globals::vao_model);
   glBindVertexArray(globals::vao_model);
 
-  GLuint vbo;
-  glGenBuffers(1, &vbo);
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  enum {
+    COORDS_VBO,
+    NORMALS_VBO,
+    COLOURS_VBO,
+    INDICES_IBO
+  };
+  GLuint buffers[4];
+  glGenBuffers(4, &buffers[0]);
+
+  glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, coords.size() * sizeof(coords[0]), coords.data(), GL_STATIC_DRAW);
   glEnableVertexAttribArray(attribs_model::COORDS);
   glVertexAttribPointer(attribs_model::COORDS, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
 
-  glGenBuffers(1, &vbo);
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, buffers[NORMALS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(normals[0]), normals.data(), GL_STATIC_DRAW);
   glEnableVertexAttribArray(attribs_model::NORMAL);
   glVertexAttribPointer(attribs_model::NORMAL, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
 
-  glGenBuffers(1, &vbo);
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, buffers[COLOURS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, colours.size() * sizeof(colours[0]), colours.data(), GL_STATIC_DRAW);
   glEnableVertexAttribArray(attribs_model::COLOUR);
   glVertexAttribPointer(attribs_model::COLOUR, 4, GL_FLOAT, GL_FALSE, sizeof(colours[0]), nullptr);
 
-  glGenBuffers(1, &vbo);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
   globals::model_size = indices.size();
 }
@@ -240,21 +233,25 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   glGenVertexArrays(1, &vao_texgen);
   glBindVertexArray(vao_texgen);
 
-  GLuint vbo;
-  glGenBuffers(1, &vbo);
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  enum {
+    COORDS_VBO,
+    TAGS_VBO,
+    INDICES_IBO
+  };
+  GLuint buffers[3];
+  glGenBuffers(3, &buffers[0]);
+
+  glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, ext.get_vertices().size() * sizeof(Vertex), &ext.get_vertices()[0], GL_STATIC_DRAW);
   glEnableVertexAttribArray(attribs_texgen::COORDS);
   glVertexAttribPointer(attribs_texgen::COORDS, 3, GL_FLOAT, GL_FALSE, sizeof(ext.get_vertices()[0]), nullptr);
 
-  glGenBuffers(1, &vbo);
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, buffers[TAGS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, tags.size() * sizeof(tags[0]), &tags[0], GL_STATIC_DRAW);
   glEnableVertexAttribArray(attribs_texgen::TAG);
   glVertexAttribIPointer(attribs_texgen::TAG, 1, GL_UNSIGNED_INT, sizeof(tags[0]), nullptr);
 
-  glGenBuffers(1, &vbo);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(Index), &indices[0], GL_STATIC_DRAW);
 
   // paint cuts
@@ -314,18 +311,28 @@ int main(int argc, char *argv[]) {
     {{1, 1, -1}, 0}
   };
 
+  std::vector<glm::vec4> colours{
+    {0, 0, 0, 0},
+    {1, 0, 0, 1},
+    {0, 1, 0, 1},
+    {0, 0, 1, 1},
+    {1, 0, 0, 1},
+    {0, 1, 0, 1},
+    {0, 0, 1, 1},
+    {1, 1, 0, 1},
+  };
+
   try {
     init_glut(argc, argv);
     GLutil::initGLEW();
     init_program();
     Volume shape = init_shape(2, shape_cuts);
-    init_model(shape, cuts);
+    init_model(shape, cuts, colours);
     init_cubemap(tex_cubemap, shape, shape_cuts, cuts);
 
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glEnable(GL_DEPTH_TEST);
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     glutMainLoop();
   } catch(const std::runtime_error& e) {
