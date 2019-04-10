@@ -35,6 +35,7 @@ namespace attribs_model {
 
 namespace uniforms_texgen {
   enum {
+    PROJ,
     NORMAL,
     OFFSET,
     TAG
@@ -210,11 +211,46 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
 }
 
 void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts) {
+  constexpr GLuint texSize = 512;
+
+  struct {
+    GLenum face;
+    glm::mat4 proj;
+  } faces[] = {
+    {GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+      {{0, 0, 0, 1},
+       {0, 1, 0, 0},
+       {-1, 0, 0, 0},
+       {0, 0, 0, 0}}},
+    {GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+      {{0, 0, 0, -1},
+       {0, 1, 0, 0},
+       {1, 0, 0, 0},
+       {0, 0, 0, 0}}},
+    {GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+      {{1, 0, 0, 0},
+       {0, 0, 0, 1},
+       {0, -1, 0, 0},
+       {0, 0, 0, 0}}},
+    {GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+      {{1, 0, 0, 0},
+       {0, 0, 0, -1},
+       {0, 1, 0, 0},
+       {0, 0, 0, 0}}},
+    {GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+      {{1, 0, 0, 0},
+       {0, 1, 0, 0},
+       {0, 0, 0, 1},
+       {0, 0, 0, 0}}},
+    {GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
+      {{-1, 0, 0, 0},
+       {0, 1, 0, 0},
+       {0, 0, 0, -1},
+       {0, 0, 0, 0}}}};
+
   GLuint framebuffer;
   glGenFramebuffers(1, &framebuffer);
   glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-  constexpr GLuint texSize = 512;
-  glViewport(0, 0, texSize, texSize);
 
   GLuint texture;
   glGenTextures(1, &texture);
@@ -226,19 +262,12 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_LOD_BIAS, -1);
-  for(GLenum face : {
-      GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
-      GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
-      GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
-      GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
-      GL_TEXTURE_CUBE_MAP_POSITIVE_X,
-      GL_TEXTURE_CUBE_MAP_NEGATIVE_X})
+  for(auto& [face, proj] : faces)
     glTexImage2D(face, 0, GL_RED, texSize, texSize, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 
   GLutil::program prog_texgen{
     GLutil::shader{"texgen.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
-    GLutil::shader{"texgen.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file},
-    GLutil::shader{"texgen.geom", GL_GEOMETRY_SHADER, GLutil::shader::from_file}};
+    GLutil::shader{"texgen.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
 
   // main volume faces
 
@@ -276,27 +305,30 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
 
   // paint cuts
 
-  glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture, 0);
   glViewport(0, 0, texSize, texSize);
-  glUseProgram(prog_texgen);
-
   glClearColor(1, 1, 1, 1);
-  glClear(GL_COLOR_BUFFER_BIT);
+  glUseProgram(prog_texgen);
   glEnable(GL_BLEND);
   glBlendEquation(GL_MIN);
 
-  for(const auto& plane : cuts) {
-    glUniform3fv(uniforms_texgen::NORMAL, 1, glm::value_ptr(plane.normal));
-    glUniform1f(uniforms_texgen::OFFSET, plane.offset);
-    glUniform1i(uniforms_texgen::TAG, 0);
-    glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
-  }
+  for(auto& [face, proj] : faces) {
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, face, texture, 0);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glUniformMatrix4fv(uniforms_texgen::PROJ, 1, GL_FALSE, glm::value_ptr(proj));
 
-  for(const auto& cut : shape_cuts) {
-    glUniform3fv(uniforms_texgen::NORMAL, 1, glm::value_ptr(cut.plane.normal));
-    glUniform1f(uniforms_texgen::OFFSET, cut.plane.offset);
-    glUniform1ui(uniforms_texgen::TAG, cut.tag);
-    glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
+    for(const auto& plane : cuts) {
+      glUniform3fv(uniforms_texgen::NORMAL, 1, glm::value_ptr(plane.normal));
+      glUniform1f(uniforms_texgen::OFFSET, plane.offset);
+      glUniform1ui(uniforms_texgen::TAG, 0);
+      glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
+    }
+
+    for(const auto& cut : shape_cuts) {
+      glUniform3fv(uniforms_texgen::NORMAL, 1, glm::value_ptr(cut.plane.normal));
+      glUniform1f(uniforms_texgen::OFFSET, cut.plane.offset);
+      glUniform1ui(uniforms_texgen::TAG, cut.tag);
+      glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
+    }
   }
 
   glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);

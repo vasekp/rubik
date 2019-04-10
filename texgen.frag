@@ -1,11 +1,11 @@
 #version 450 core
 
-layout(location = 0) uniform vec3 normal;
-layout(location = 1) uniform float off;
-layout(location = 2) uniform uint tag;
+layout(location = 1) uniform vec3 normal;
+layout(location = 2) uniform float off;
+layout(location = 3) uniform uint u_tag;
 
-in vec4 coords;
-in flat uint g_tag;
+in vec3 coords;
+in flat uint tag;
 out float color;
 
 float cutoff(float q) {
@@ -13,7 +13,7 @@ float cutoff(float q) {
 }
 
 void main() {
-  if(g_tag == tag)
+  if(tag == u_tag)
     discard;
-  color = cutoff(dot(normal, vec3(coords)) - off);
+  color = cutoff(dot(normal, coords) - off);
 }
