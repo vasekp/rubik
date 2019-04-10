@@ -9,9 +9,10 @@
 
 namespace globals {
   int window;
-  size_t model_size;
   GLuint vao_model;
   GLutil::program prog_model;
+  std::vector<GLvoid*> starts;
+  std::vector<GLsizei> counts;
   float time = 0;
 }
 
@@ -19,7 +20,8 @@ namespace uniforms_model {
   enum {
     MODELVIEW,
     PROJ,
-    TEXTURE
+    TEXTURE,
+    VOL_ID
   };
 }
 
@@ -65,7 +67,10 @@ void draw_cb() {
   glUseProgram(globals::prog_model);
   glBindVertexArray(globals::vao_model);
   glUniformMatrix4fv(uniforms_model::MODELVIEW, 1, GL_FALSE, glm::value_ptr(modelview));
-  glDrawElements(GL_TRIANGLES, globals::model_size, GL_UNSIGNED_SHORT, nullptr);
+  for(size_t i = 0; i < globals::counts.size(); i++) {
+    glUniform1ui(uniforms_model::VOL_ID, i);
+    glDrawElements(GL_TRIANGLES, globals::counts[i], GL_UNSIGNED_SHORT, globals::starts[i]);
+  }
   glutSwapBuffers();
   globals::time += 0.01;
 }
@@ -137,9 +142,13 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
   std::vector<glm::vec4> colours{};
   std::vector<Index> indices{};
 
+  globals::starts.resize(0);
+  globals::counts.resize(0);
+
   for(auto& volume : m.get_volumes()) {
     ExtVolume ext(std::move(volume), 0.03);
     size_t base = coords.size();
+    size_t indexBase = indices.size();
     const auto& vertices = ext.get_vertices();
     std::copy(begin(vertices), end(vertices), std::back_inserter(coords));
     for(const auto& face : ext.get_faces()) {
@@ -148,6 +157,8 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
     }
     append_face_list(indices, base, ext.get_faces());
     append_face_list(indices, base, ext.get_ext_faces());
+    globals::starts.push_back(reinterpret_cast<void*>(indexBase * sizeof(Index)));
+    globals::counts.push_back(indices.size() - indexBase);
   }
 #ifdef DEBUG
   std::cout << '\n' << coords.size() << ' ' << normals.size() << ' ' << indices.size() << '\n';
@@ -164,10 +175,11 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
     COORDS_VBO,
     NORMALS_VBO,
     COLOURS_VBO,
-    INDICES_IBO
+    INDICES_IBO,
+    MATRICES_SSBO
   };
-  GLuint buffers[4];
-  glGenBuffers(4, &buffers[0]);
+  GLuint buffers[5];
+  glGenBuffers(5, &buffers[0]);
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, coords.size() * sizeof(coords[0]), coords.data(), GL_STATIC_DRAW);
@@ -186,7 +198,15 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
-  globals::model_size = indices.size();
+
+  std::vector<glm::mat4> matrices(m.get_volumes().size());
+  const auto& volumes = m.get_volumes();
+  for(size_t i = 0; i < volumes.size(); i++)
+    if(volumes[i].center() * cuts[0] > 0)
+      matrices[i] = glm::rotate(glm::mat4{}, 0.5f, cuts[0].normal);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[MATRICES_SSBO]);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, matrices.size() * sizeof(glm::mat4), glm::value_ptr(matrices[0]), GL_STATIC_DRAW);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, buffers[MATRICES_SSBO]);
 }
 
 void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts) {

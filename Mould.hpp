@@ -172,6 +172,13 @@ public:
     return faces.empty();
   }
 
+  Vertex center() const {
+    Vertex ret{};
+    for(const auto& vx : vertices)
+      ret += vx;
+    return ret / float(vertices.size());
+  }
+
 #ifdef DEBUG
   void dump() const {
     std::cout << "VOLUME:\n";
