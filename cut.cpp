@@ -138,7 +138,7 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts) {
   std::vector<Index> indices{};
 
   glm::vec4 col_vals[] = {
-    {1, 1, 1, 1},
+    {0, 0, 0, 0},
     {1, 0, 0, 1},
     {0, 1, 0, 1},
     {0, 0, 1, 1},
@@ -220,7 +220,7 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
       GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
       GL_TEXTURE_CUBE_MAP_POSITIVE_X,
       GL_TEXTURE_CUBE_MAP_NEGATIVE_X})
-    glTexImage2D(face, 0, GL_RGBA, texSize, texSize, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(face, 0, GL_RED, texSize, texSize, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 
   GLutil::program prog_texgen{
     GLutil::shader{"texgen.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
