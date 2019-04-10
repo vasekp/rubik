@@ -33,18 +33,25 @@ namespace attribs_model {
 namespace uniforms_texgen {
   enum {
     NORMAL,
-    OFFSET
+    OFFSET,
+    TAG
   };
 }
 
 namespace attribs_texgen {
   enum {
-    COORDS
+    COORDS,
+    TAG
   };
 }
 
+struct Cut {
+  Plane plane;
+  Index tag;
+};
+
 void draw_cb() {
-  static float time;
+  static float time = 3;
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glm::mat4 modelview = glm::rotate(
       glm::rotate(
@@ -52,7 +59,7 @@ void draw_cb() {
           glm::translate(
             glm::mat4{},
             glm::vec3(0, 0, 3)),
-          glm::vec3(.5)),
+          glm::vec3(1)),
         -0.3f, glm::vec3{1, 0, 0}),
       -time, glm::vec3{0, 1, 0});
   glUseProgram(globals::prog_model);
@@ -113,10 +120,10 @@ void init_program() {
     GLutil::shader{"cut.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
 }
 
-Volume init_shape(float size, const std::vector<Plane>& cuts) {
+Volume init_shape(float size, const std::vector<Cut>& cuts) {
   Volume shape{size};
-  for(const auto& plane : cuts)
-    shape.cut(plane, 1);
+  for(const auto& cut : cuts)
+    shape.cut(cut.plane, cut.tag);
   return shape;
 }
 
@@ -132,10 +139,17 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts) {
 
   glm::vec4 col_vals[] = {
     {1, 1, 1, 1},
-    {1, 1, 0, 1}};
+    {1, 0, 0, 1},
+    {0, 1, 0, 1},
+    {0, 0, 1, 1},
+    {1, 0, 0, 1},
+    {0, 1, 0, 1},
+    {0, 0, 1, 1},
+    {1, 1, 0, 1},
+  };
 
   for(auto& volume : m.get_volumes()) {
-    ExtVolume ext(std::move(volume), 0.05);
+    ExtVolume ext(std::move(volume), 0.03);
     size_t base = coords.size();
     const auto& vertices = ext.get_vertices();
     std::copy(begin(vertices), end(vertices), std::back_inserter(coords));
@@ -182,7 +196,7 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts) {
   globals::model_size = indices.size();
 }
 
-void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector<Plane>& cuts) {
+void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts) {
   GLuint framebuffer;
   glGenFramebuffers(1, &framebuffer);
   glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -216,7 +230,11 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   // main volume faces
 
   std::vector<Index> indices{};
-  append_face_list(indices, 0, main_volume.get_faces());
+  std::vector<glm::uint> tags{};
+  ExtVolume ext{main_volume};
+  append_face_list(indices, 0, ext.get_faces());
+  for(const auto& face : ext.get_faces())
+    std::fill_n(std::back_inserter(tags), face.indices.size(), static_cast<glm::uint>(face.tag));
 
   GLuint vao_texgen;
   glGenVertexArrays(1, &vao_texgen);
@@ -225,9 +243,15 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   GLuint vbo;
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glBufferData(GL_ARRAY_BUFFER, main_volume.get_vertices().size() * sizeof(Vertex), &main_volume.get_vertices()[0], GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, ext.get_vertices().size() * sizeof(Vertex), &ext.get_vertices()[0], GL_STATIC_DRAW);
   glEnableVertexAttribArray(attribs_texgen::COORDS);
-  glVertexAttribPointer(attribs_texgen::COORDS, 3, GL_FLOAT, GL_FALSE, sizeof(main_volume.get_vertices()[0]), nullptr);
+  glVertexAttribPointer(attribs_texgen::COORDS, 3, GL_FLOAT, GL_FALSE, sizeof(ext.get_vertices()[0]), nullptr);
+
+  glGenBuffers(1, &vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, tags.size() * sizeof(tags[0]), &tags[0], GL_STATIC_DRAW);
+  glEnableVertexAttribArray(attribs_texgen::TAG);
+  glVertexAttribIPointer(attribs_texgen::TAG, 1, GL_UNSIGNED_INT, sizeof(tags[0]), nullptr);
 
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo);
@@ -247,6 +271,14 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   for(const auto& plane : cuts) {
     glUniform3fv(uniforms_texgen::NORMAL, 1, glm::value_ptr(plane.normal));
     glUniform1f(uniforms_texgen::OFFSET, plane.offset);
+    glUniform1i(uniforms_texgen::TAG, 0);
+    glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
+  }
+
+  for(const auto& cut : shape_cuts) {
+    glUniform3fv(uniforms_texgen::NORMAL, 1, glm::value_ptr(cut.plane.normal));
+    glUniform1f(uniforms_texgen::OFFSET, cut.plane.offset);
+    glUniform1ui(uniforms_texgen::TAG, cut.tag);
     glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
   }
 
@@ -265,8 +297,14 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
 int main(int argc, char *argv[]) {
   constexpr unsigned tex_cubemap = 0;
 
-  std::vector<Plane> shape_cuts{
-    {{1, 1, 1}, 2}
+  std::vector<Cut> shape_cuts{
+    {{{1, 0, 0}, 1}, 1},
+    {{{0, 1, 0}, 1}, 2},
+    {{{0, 0, 1}, 1}, 3},
+    {{{-1, 0, 0}, 1}, 4},
+    {{{0, -1, 0}, 1}, 5},
+    {{{0, 0, -1}, 1}, 6},
+    {{{1, 1, 1}, 1}, 7}
   };
 
   std::vector<Plane> cuts{
@@ -282,7 +320,7 @@ int main(int argc, char *argv[]) {
     init_program();
     Volume shape = init_shape(2, shape_cuts);
     init_model(shape, cuts);
-    init_cubemap(tex_cubemap, shape, cuts);
+    init_cubemap(tex_cubemap, shape, shape_cuts, cuts);
 
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
