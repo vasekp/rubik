@@ -58,6 +58,15 @@ struct Cut {
   Index tag;
 };
 
+#ifdef DEBUG
+void report(const std::string& r) {
+  std::cout << std::hex;
+  while(auto e = glGetError()) {
+    std::cout << r << ": " << e << '\n';
+  }
+}
+#endif
+
 void draw(GLFWwindow* window) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glm::mat4 modelview = glm::rotate(
