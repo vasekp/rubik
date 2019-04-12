@@ -1,6 +1,6 @@
 #version 450 core
 
-layout(location = 2) uniform samplerCube sampler;
+layout(location = 3) uniform samplerCube sampler;
 
 in vec4 coords;
 in vec3 texCoord;

@@ -15,13 +15,15 @@ namespace globals {
   std::vector<Vertex> centers;
   std::vector<GLvoid*> starts;
   std::vector<GLsizei> counts;
+  std::vector<glm::mat4> matrices;
   size_t piece_count;
   float time = 0;
 }
 
 namespace uniforms_model {
   enum {
-    MODELVIEW,
+    MODEL,
+    VIEW,
     PROJ,
     TEXTURE
   };
@@ -70,19 +72,14 @@ void draw(GLFWwindow* window) {
 
   Plane cut{{-1, 1, 1}, 0};
   for(size_t i = 0; i < globals::piece_count; i++)
-    if(globals::centers[i] * cut > 0) {
-      glm::mat4 mx{};
-      glGetNamedBufferSubData(globals::all_matrices, i * sizeof(glm::mat4), sizeof(glm::mat4), &mx[0][0]);
-      mx = glm::rotate(mx, 0.01f, cut.normal);
-      glNamedBufferSubData(globals::all_matrices, i * sizeof(glm::mat4), sizeof(glm::mat4), &mx[0][0]);
-    }
-  glMemoryBarrier(GL_UNIFORM_BARRIER_BIT);
+    if(globals::centers[i] * cut > 0)
+      globals::matrices[i] = glm::rotate(globals::matrices[i], 0.01f, cut.normal);
 
   glUseProgram(globals::prog_model);
   glBindVertexArray(globals::vao_model);
-  glUniformMatrix4fv(uniforms_model::MODELVIEW, 1, GL_FALSE, glm::value_ptr(modelview));
+  glUniformMatrix4fv(uniforms_model::VIEW, 1, GL_FALSE, glm::value_ptr(modelview));
   for(size_t i = 0; i < globals::piece_count; i++) {
-    glCopyNamedBufferSubData(globals::all_matrices, globals::this_matrix, i * sizeof(glm::mat4), 0, sizeof(glm::mat4));
+    glUniformMatrix4fv(uniforms_model::MODEL, 1, GL_FALSE, glm::value_ptr(globals::matrices[i]));
     glDrawElements(GL_TRIANGLES, globals::counts[i], GL_UNSIGNED_SHORT, globals::starts[i]);
   }
 
@@ -182,6 +179,8 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
     globals::centers.push_back(volume.center());
   }
   globals::piece_count = m.get_volumes().size();
+  globals::matrices.resize(globals::piece_count);
+  std::fill(begin(globals::matrices), end(globals::matrices), glm::mat4{});
 #ifdef DEBUG
   std::cout << '\n' << coords.size() << ' ' << normals.size() << ' ' << indices.size() << '\n';
   std::cout << "[ ";
@@ -197,12 +196,10 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
     COORDS_VBO,
     NORMALS_VBO,
     COLOURS_VBO,
-    INDICES_IBO,
-    MATRICES_UBO,
-    SINGLE_MATRIX_UBO
+    INDICES_IBO
   };
-  GLuint buffers[6];
-  glGenBuffers(6, &buffers[0]);
+  GLuint buffers[4];
+  glGenBuffers(4, &buffers[0]);
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, coords.size() * sizeof(coords[0]), coords.data(), GL_STATIC_DRAW);
@@ -221,16 +218,6 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
-
-  std::vector<glm::mat4> matrices(globals::piece_count);
-  glBindBuffer(GL_UNIFORM_BUFFER, buffers[MATRICES_UBO]);
-  glBufferData(GL_UNIFORM_BUFFER, globals::piece_count * sizeof(glm::mat4), glm::value_ptr(matrices[0]), GL_DYNAMIC_DRAW);
-  globals::all_matrices = buffers[MATRICES_UBO];
-
-  glBindBuffer(GL_UNIFORM_BUFFER, buffers[SINGLE_MATRIX_UBO]);
-  glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), nullptr, GL_DYNAMIC_DRAW);
-  glBindBufferBase(GL_UNIFORM_BUFFER, 0, buffers[SINGLE_MATRIX_UBO]);
-  globals::this_matrix = buffers[SINGLE_MATRIX_UBO];
 }
 
 void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts) {
