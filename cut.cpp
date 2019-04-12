@@ -16,41 +16,14 @@ namespace globals {
   std::vector<GLvoid*> starts;
   std::vector<GLsizei> counts;
   std::vector<glm::mat4> matrices;
+  struct {
+    GLint model;
+    GLint view;
+    GLint proj;
+    GLint texture;
+  } uniforms_model;
   size_t piece_count;
   float time = 0;
-}
-
-namespace uniforms_model {
-  enum {
-    MODEL,
-    VIEW,
-    PROJ,
-    TEXTURE
-  };
-}
-
-namespace attribs_model {
-  enum {
-    COORDS,
-    NORMAL,
-    COLOUR
-  };
-}
-
-namespace uniforms_texgen {
-  enum {
-    PROJ,
-    NORMAL,
-    OFFSET,
-    TAG
-  };
-}
-
-namespace attribs_texgen {
-  enum {
-    COORDS,
-    TAG
-  };
 }
 
 struct Cut {
@@ -86,9 +59,9 @@ void draw(GLFWwindow* window) {
 
   glUseProgram(globals::prog_model);
   glBindVertexArray(globals::vao_model);
-  glUniformMatrix4fv(uniforms_model::VIEW, 1, GL_FALSE, glm::value_ptr(modelview));
+  glUniformMatrix4fv(globals::uniforms_model.view, 1, GL_FALSE, glm::value_ptr(modelview));
   for(size_t i = 0; i < globals::piece_count; i++) {
-    glUniformMatrix4fv(uniforms_model::MODEL, 1, GL_FALSE, glm::value_ptr(globals::matrices[i]));
+    glUniformMatrix4fv(globals::uniforms_model.model, 1, GL_FALSE, glm::value_ptr(globals::matrices[i]));
     glDrawElements(GL_TRIANGLES, globals::counts[i], GL_UNSIGNED_SHORT, globals::starts[i]);
   }
 
@@ -106,7 +79,8 @@ void resize_cb(GLFWwindow* window, int w, int h) {
     {0, w < h ? ratio : 1, 0, 0},
     {0, 0, .1, .2},
     {0, 0, 0, 1}};
-  glProgramUniformMatrix4fv(globals::prog_model, uniforms_model::PROJ, 1, GL_FALSE, glm::value_ptr(proj));
+  glUseProgram(globals::prog_model);
+  glUniformMatrix4fv(globals::uniforms_model.proj, 1, GL_FALSE, glm::value_ptr(proj));
 }
 
 void append_face_list(std::vector<Index>& indices, size_t base, const std::vector<Face>& faces) {
@@ -132,8 +106,9 @@ void key_cb(GLFWwindow *window, unsigned key) {
 GLFWwindow* init_glfw() {
   if(!glfwInit())
     throw std::runtime_error("glfwInit failed\n");;
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+  glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
   GLFWwindow* window = glfwCreateWindow(640, 480, "Title", NULL, NULL);
   if(!window)
     throw std::runtime_error("glfwCreateWindow failed");
@@ -148,6 +123,10 @@ void init_program() {
   globals::prog_model = GLutil::program{
     GLutil::shader{"cut.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
     GLutil::shader{"cut.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
+  globals::uniforms_model.model = glGetUniformLocation(globals::prog_model, "model");
+  globals::uniforms_model.view = glGetUniformLocation(globals::prog_model, "view");
+  globals::uniforms_model.proj = glGetUniformLocation(globals::prog_model, "proj");
+  globals::uniforms_model.texture = glGetUniformLocation(globals::prog_model, "sampler");
 }
 
 Volume init_shape(float size, const std::vector<Cut>& cuts) {
@@ -198,6 +177,16 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
   std::cout << "]\n";
 #endif
 
+  struct {
+    GLint coords;
+    GLint normal;
+    GLint colour;
+  } attribs = {
+    glGetAttribLocation(globals::prog_model, "in_coords"),
+    glGetAttribLocation(globals::prog_model, "in_normal"),
+    glGetAttribLocation(globals::prog_model, "in_colour")
+  };
+
   glGenVertexArrays(1, &globals::vao_model);
   glBindVertexArray(globals::vao_model);
 
@@ -212,18 +201,18 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, coords.size() * sizeof(coords[0]), coords.data(), GL_STATIC_DRAW);
-  glEnableVertexAttribArray(attribs_model::COORDS);
-  glVertexAttribPointer(attribs_model::COORDS, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
+  glEnableVertexAttribArray(attribs.coords);
+  glVertexAttribPointer(attribs.coords, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[NORMALS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(normals[0]), normals.data(), GL_STATIC_DRAW);
-  glEnableVertexAttribArray(attribs_model::NORMAL);
-  glVertexAttribPointer(attribs_model::NORMAL, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
+  glEnableVertexAttribArray(attribs.normal);
+  glVertexAttribPointer(attribs.normal, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[COLOURS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, colours.size() * sizeof(colours[0]), colours.data(), GL_STATIC_DRAW);
-  glEnableVertexAttribArray(attribs_model::COLOUR);
-  glVertexAttribPointer(attribs_model::COLOUR, 4, GL_FLOAT, GL_FALSE, sizeof(colours[0]), nullptr);
+  glEnableVertexAttribArray(attribs.colour);
+  glVertexAttribPointer(attribs.colour, 4, GL_FLOAT, GL_FALSE, sizeof(colours[0]), nullptr);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
@@ -280,13 +269,31 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_LOD_BIAS, -1);
   for(auto& [face, proj] : faces)
-    glTexImage2D(face, 0, GL_RED, texSize, texSize, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(face, 0, GL_RGB, texSize, texSize, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 
   GLutil::program prog_texgen{
     GLutil::shader{"texgen.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
     GLutil::shader{"texgen.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
+
+  struct {
+    GLint proj;
+    GLint normal;
+    GLint offset;
+    GLint tag;
+  } uniforms = {
+    glGetUniformLocation(prog_texgen, "proj"),
+    glGetUniformLocation(prog_texgen, "normal"),
+    glGetUniformLocation(prog_texgen, "off"),
+    glGetUniformLocation(prog_texgen, "u_tag")
+  };
+  struct {
+    GLint coords;
+    GLint tag;
+  } attribs = {
+    glGetAttribLocation(prog_texgen, "in_coords"),
+    glGetAttribLocation(prog_texgen, "in_tag")
+  };
 
   // main volume faces
 
@@ -311,13 +318,13 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, ext.get_vertices().size() * sizeof(Vertex), &ext.get_vertices()[0], GL_STATIC_DRAW);
-  glEnableVertexAttribArray(attribs_texgen::COORDS);
-  glVertexAttribPointer(attribs_texgen::COORDS, 3, GL_FLOAT, GL_FALSE, sizeof(ext.get_vertices()[0]), nullptr);
+  glEnableVertexAttribArray(attribs.coords);
+  glVertexAttribPointer(attribs.coords, 3, GL_FLOAT, GL_FALSE, sizeof(ext.get_vertices()[0]), nullptr);
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[TAGS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, tags.size() * sizeof(tags[0]), &tags[0], GL_STATIC_DRAW);
-  glEnableVertexAttribArray(attribs_texgen::TAG);
-  glVertexAttribIPointer(attribs_texgen::TAG, 1, GL_UNSIGNED_INT, sizeof(tags[0]), nullptr);
+  glEnableVertexAttribArray(attribs.tag);
+  glVertexAttribIPointer(attribs.tag, 1, GL_UNSIGNED_INT, sizeof(tags[0]), nullptr);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(Index), &indices[0], GL_STATIC_DRAW);
@@ -333,26 +340,26 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   for(auto& [face, proj] : faces) {
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, face, texture, 0);
     glClear(GL_COLOR_BUFFER_BIT);
-    glUniformMatrix4fv(uniforms_texgen::PROJ, 1, GL_FALSE, glm::value_ptr(proj));
+    glUniformMatrix4fv(uniforms.proj, 1, GL_FALSE, glm::value_ptr(proj));
 
     for(const auto& plane : cuts) {
-      glUniform3fv(uniforms_texgen::NORMAL, 1, glm::value_ptr(plane.normal));
-      glUniform1f(uniforms_texgen::OFFSET, plane.offset);
-      glUniform1ui(uniforms_texgen::TAG, 0);
+      glUniform3fv(uniforms.normal, 1, glm::value_ptr(plane.normal));
+      glUniform1f(uniforms.offset, plane.offset);
+      glUniform1ui(uniforms.tag, 0);
       glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
     }
 
     for(const auto& cut : shape_cuts) {
-      glUniform3fv(uniforms_texgen::NORMAL, 1, glm::value_ptr(cut.plane.normal));
-      glUniform1f(uniforms_texgen::OFFSET, cut.plane.offset);
-      glUniform1ui(uniforms_texgen::TAG, cut.tag);
+      glUniform3fv(uniforms.normal, 1, glm::value_ptr(cut.plane.normal));
+      glUniform1f(uniforms.offset, cut.plane.offset);
+      glUniform1ui(uniforms.tag, cut.tag);
       glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
     }
   }
 
-  glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
   glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
-  glProgramUniform1i(globals::prog_model, uniforms_model::TEXTURE, texUnit);
+  glUseProgram(globals::prog_model);
+  glUniform1i(globals::uniforms_model.texture, texUnit);
 
   // reset to sensible state
 

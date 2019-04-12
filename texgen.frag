@@ -1,19 +1,21 @@
-#version 450 core
+#version 300 es
 
-layout(location = 1) uniform vec3 normal;
-layout(location = 2) uniform float off;
-layout(location = 3) uniform uint u_tag;
+precision mediump float;
+
+uniform vec3 normal;
+uniform float off;
+uniform uint u_tag;
 
 in vec3 coords;
-in flat uint tag;
-out float color;
+flat in uint tag;
+out vec3 color;
 
 float cutoff(float q) {
-  return abs(q) < 0.04 ? 0 : 1;
+  return abs(q) < 0.04 ? 0.0 : 1.0;
 }
 
 void main() {
   if(tag == u_tag)
     discard;
-  color = cutoff(dot(normal, coords) - off);
+  color = vec3(cutoff(dot(normal, coords) - off));
 }

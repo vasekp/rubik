@@ -1,11 +1,14 @@
-#version 450 core
-layout(location = 0) uniform mat4 proj;
+#version 300 es
 
-layout(location = 0) in vec3 in_coords;
-layout(location = 1) in uint in_tag;
+precision mediump float;
+
+uniform mat4 proj;
+
+in vec3 in_coords;
+in uint in_tag;
 
 out vec3 coords;
-out uint tag;
+flat out uint tag;
 
 void main() {
   vec4 c1 = vec4(in_coords, 1);

@@ -1,12 +1,14 @@
-#version 450 core
+#version 300 es
 
-layout(location = 0) uniform mat4 model;
-layout(location = 1) uniform mat4 view;
-layout(location = 2) uniform mat4 proj;
+precision mediump float;
 
-layout(location = 0) in vec3 in_coords;
-layout(location = 1) in vec3 in_normal;
-layout(location = 2) in vec4 in_colour;
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 proj;
+
+in vec3 in_coords;
+in vec3 in_normal;
+in vec4 in_colour;
 
 out vec4 coords;
 out vec3 texCoord;
