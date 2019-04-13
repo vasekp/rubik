@@ -36,10 +36,16 @@ void key_cb(GLFWwindow *window, unsigned key) {
     glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
 
+void error_cb(int, const char* desc) {
+  std::cout.flush();
+  std::cerr << desc << '\n';
+}
+
 GLFWwindow* init_glfw() {
   if(!glfwInit())
     throw std::runtime_error("glfwInit failed\n");;
-  glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+  glfwSetErrorCallback(error_cb);
+  //glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
   GLFWwindow* window = glfwCreateWindow(640, 480, "Title", NULL, NULL);
