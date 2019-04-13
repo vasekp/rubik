@@ -1,10 +1,6 @@
 //#define DEBUG
 #include "rubik.hpp"
 
-#ifdef DEBUG
-#include <iostream>
-#endif
-
 void update_proj(Context& ctx, int w, int h) {
   glViewport(0, 0, w, h);
   float ratio = (float)w / h;
@@ -118,13 +114,6 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
   ctx.piece_count = m.get_volumes().size();
   ctx.matrices.resize(ctx.piece_count);
   std::fill(begin(ctx.matrices), end(ctx.matrices), glm::mat4{});
-#ifdef DEBUG
-  std::cout << '\n' << coords.size() << ' ' << normals.size() << ' ' << indices.size() << '\n';
-  std::cout << "[ ";
-  for(auto ix : indices)
-    std::cout << ix << ", ";
-  std::cout << "]\n";
-#endif
 
   struct {
     GLint coords;

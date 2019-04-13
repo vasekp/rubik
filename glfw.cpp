@@ -3,15 +3,6 @@
 #include "rubik.hpp"
 #include <GLFW/glfw3.h>
 
-#ifdef DEBUG
-void report(const std::string& r) {
-  std::cout << std::hex;
-  while(auto e = glGetError()) {
-    std::cout << r << ": " << e << '\n';
-  }
-}
-#endif
-
 glm::vec2 touch_location(GLFWwindow* window) {
   double x, y;
   glfwGetCursorPos(window, &x, &y);
