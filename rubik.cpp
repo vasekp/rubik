@@ -1,88 +1,55 @@
 //#define DEBUG
-#include "Mould.hpp"
-#include "GLutil.hpp"
-#include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include "rubik.hpp"
 
 #ifdef DEBUG
 #include <iostream>
 #endif
 
-namespace globals {
-  GLuint vao_model;
-  GLutil::program prog_model;
-  GLuint all_matrices;
-  GLuint this_matrix;
-  std::vector<Vertex> centers;
-  std::vector<GLvoid*> starts;
-  std::vector<GLsizei> counts;
-  std::vector<glm::mat4> matrices;
-  glm::vec2 buttondown_loc;
-  glm::vec2 window_size;
-  bool buttondown;
-  glm::mat4 proj;
-  glm::mat4 view;
-  glm::mat4 model;
-  struct UM {
-    GLint submodel;
-    GLint modelview;
-    GLint proj;
-    GLint texture;
-  } uniforms_model;
-  size_t piece_count;
-}
-
-struct Cut {
-  Plane plane;
-  Index tag;
-};
-
-void update_proj(int w, int h) {
+void update_proj(Context& ctx, int w, int h) {
   glViewport(0, 0, w, h);
   float ratio = (float)w / h;
-  globals::proj = glm::mat4{
+  ctx.proj = glm::mat4{
     {w > h ? 1/ratio : 1, 0, 0, 0},
     {0, w < h ? ratio : 1, 0, 0},
     {0, 0, .1, .2},
     {0, 0, 0, 1}};
-  glUseProgram(globals::prog_model);
-  glUniformMatrix4fv(globals::uniforms_model.proj, 1, GL_FALSE, glm::value_ptr(globals::proj));
-  globals::window_size = glm::vec2{w, h};
+  glUseProgram(ctx.prog_model);
+  glUniformMatrix4fv(ctx.uniforms_model.proj, 1, GL_FALSE, glm::value_ptr(ctx.proj));
+  ctx.window_size = glm::vec2{w, h};
 }
 
-void rotate_model(glm::vec2 loc, bool rewrite) {
-  loc -= globals::buttondown_loc;
-  loc /= globals::window_size/2.f;
-  glm::vec2 last_two = []() -> auto {
-    glm::vec4 v{globals::proj * glm::vec4{0, 0, 1, 1}};
+void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite) {
+  loc -= ctx.buttondown_loc;
+  loc /= ctx.window_size/2.f;
+  glm::vec2 last_two = [&ctx]() -> auto {
+    glm::vec4 v{ctx.proj * glm::vec4{0, 0, 1, 1}};
     return glm::vec2{v.z, v.w};
   }();
-  glm::vec2 modelcoord = glm::vec2{inverse(globals::proj) * glm::vec4{loc, last_two}};
+  glm::vec2 modelcoord = glm::vec2{inverse(ctx.proj) * glm::vec4{loc, last_two}};
   glm::mat4 model = glm::rotate(
       glm::rotate(
         glm::mat4{},
         -modelcoord.x, {0, 1, 0}),
-      -modelcoord.y, {1, 0, 0}) * globals::model;
-  glUseProgram(globals::prog_model);
-  glUniformMatrix4fv(globals::uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(globals::view * model));
+      -modelcoord.y, {1, 0, 0}) * ctx.model;
+  glUseProgram(ctx.prog_model);
+  glUniformMatrix4fv(ctx.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.view * model));
   if(rewrite)
-    globals::model = model;
+    ctx.model = model;
 }
 
-void draw() {
+void draw(Context& ctx) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   Plane cut{{-1, 1, 1}, 0};
-  for(size_t i = 0; i < globals::piece_count; i++)
-    if(globals::centers[i] * cut > 0)
-      globals::matrices[i] = glm::rotate(globals::matrices[i], 0.01f, cut.normal);
+  for(size_t i = 0; i < ctx.piece_count; i++)
+    if(ctx.centers[i] * cut > 0)
+      ctx.matrices[i] = glm::rotate(ctx.matrices[i], 0.01f, cut.normal);
 
-  glUseProgram(globals::prog_model);
-  glBindVertexArray(globals::vao_model);
-  for(size_t i = 0; i < globals::piece_count; i++) {
-    glUniformMatrix4fv(globals::uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(globals::matrices[i]));
-    glDrawElements(GL_TRIANGLES, globals::counts[i], GL_UNSIGNED_SHORT, globals::starts[i]);
+  glUseProgram(ctx.prog_model);
+  glBindVertexArray(ctx.vao_model);
+  for(size_t i = 0; i < ctx.piece_count; i++) {
+    glUniformMatrix4fv(ctx.uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(ctx.matrices[i]));
+    glDrawElements(GL_TRIANGLES, ctx.counts[i], GL_UNSIGNED_SHORT, ctx.starts[i]);
   }
 }
 
@@ -101,24 +68,24 @@ void append_face_list(std::vector<Index>& indices, size_t base, const std::vecto
   }
 }
 
-void init_program() {
-  globals::prog_model = GLutil::program{
+void init_program(Context& ctx) {
+  ctx.prog_model = GLutil::program{
     GLutil::shader{"model.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
     GLutil::shader{"model.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
-  globals::uniforms_model.submodel = glGetUniformLocation(globals::prog_model, "submodel");
-  globals::uniforms_model.modelview = glGetUniformLocation(globals::prog_model, "modelview");
-  globals::uniforms_model.proj = glGetUniformLocation(globals::prog_model, "proj");
-  globals::uniforms_model.texture = glGetUniformLocation(globals::prog_model, "sampler");
+  ctx.uniforms_model.submodel = glGetUniformLocation(ctx.prog_model, "submodel");
+  ctx.uniforms_model.modelview = glGetUniformLocation(ctx.prog_model, "modelview");
+  ctx.uniforms_model.proj = glGetUniformLocation(ctx.prog_model, "proj");
+  ctx.uniforms_model.texture = glGetUniformLocation(ctx.prog_model, "sampler");
 }
 
-Volume init_shape(float size, const std::vector<Cut>& cuts) {
+Volume init_shape(Context&, float size, const std::vector<Cut>& cuts) {
   Volume shape{size};
   for(const auto& cut : cuts)
     shape.cut(cut.plane, cut.tag);
   return shape;
 }
 
-void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::vector<glm::vec4>& colour_vals) {
+void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cuts, const std::vector<glm::vec4>& colour_vals) {
   Mould m{shape};
   for(const auto& plane : cuts)
     m.cut(plane);
@@ -128,9 +95,9 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
   std::vector<glm::vec4> colours{};
   std::vector<Index> indices{};
 
-  globals::starts.resize(0);
-  globals::counts.resize(0);
-  globals::centers.resize(0);
+  ctx.starts.resize(0);
+  ctx.counts.resize(0);
+  ctx.centers.resize(0);
 
   for(auto& volume : m.get_volumes()) {
     ExtVolume ext(std::move(volume), 0.03);
@@ -144,13 +111,13 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
     }
     append_face_list(indices, base, ext.get_faces());
     append_face_list(indices, base, ext.get_ext_faces());
-    globals::starts.push_back(reinterpret_cast<void*>(indexBase * sizeof(Index)));
-    globals::counts.push_back(indices.size() - indexBase);
-    globals::centers.push_back(volume.center());
+    ctx.starts.push_back(reinterpret_cast<void*>(indexBase * sizeof(Index)));
+    ctx.counts.push_back(indices.size() - indexBase);
+    ctx.centers.push_back(volume.center());
   }
-  globals::piece_count = m.get_volumes().size();
-  globals::matrices.resize(globals::piece_count);
-  std::fill(begin(globals::matrices), end(globals::matrices), glm::mat4{});
+  ctx.piece_count = m.get_volumes().size();
+  ctx.matrices.resize(ctx.piece_count);
+  std::fill(begin(ctx.matrices), end(ctx.matrices), glm::mat4{});
 #ifdef DEBUG
   std::cout << '\n' << coords.size() << ' ' << normals.size() << ' ' << indices.size() << '\n';
   std::cout << "[ ";
@@ -164,13 +131,13 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
     GLint normal;
     GLint colour;
   } attribs = {
-    glGetAttribLocation(globals::prog_model, "in_coords"),
-    glGetAttribLocation(globals::prog_model, "in_normal"),
-    glGetAttribLocation(globals::prog_model, "in_colour")
+    glGetAttribLocation(ctx.prog_model, "in_coords"),
+    glGetAttribLocation(ctx.prog_model, "in_normal"),
+    glGetAttribLocation(ctx.prog_model, "in_colour")
   };
 
-  glGenVertexArrays(1, &globals::vao_model);
-  glBindVertexArray(globals::vao_model);
+  glGenVertexArrays(1, &ctx.vao_model);
+  glBindVertexArray(ctx.vao_model);
 
   enum {
     COORDS_VBO,
@@ -199,17 +166,17 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
 
-  globals::view = glm::translate(glm::mat4{}, glm::vec3(0, 0, 3));
-  globals::model = glm::rotate(
+  ctx.view = glm::translate(glm::mat4{}, glm::vec3(0, 0, 3));
+  ctx.model = glm::rotate(
       glm::rotate(
         glm::mat4{},
         -0.3f, glm::vec3{1, 0, 0}),
       -1.f, glm::vec3{0, 1, 0});
-  glUseProgram(globals::prog_model);
-  glUniformMatrix4fv(globals::uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(globals::view * globals::model));
+  glUseProgram(ctx.prog_model);
+  glUniformMatrix4fv(ctx.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.view * ctx.model));
 }
 
-void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts) {
+void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts) {
   constexpr GLuint texSize = 512;
 
   struct {
@@ -349,8 +316,8 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   }
 
   glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
-  glUseProgram(globals::prog_model);
-  glUniform1i(globals::uniforms_model.texture, texUnit);
+  glUseProgram(ctx.prog_model);
+  glUniform1i(ctx.uniforms_model.texture, texUnit);
 
   // reset to sensible state
 

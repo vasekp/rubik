@@ -26,6 +26,11 @@ struct Plane {
   }
 };
 
+struct Cut {
+  Plane plane;
+  Index tag;
+};
+
 struct Face {
   std::vector<Index> indices;
   glm::vec3 normal;

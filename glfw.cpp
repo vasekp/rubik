@@ -1,50 +1,7 @@
 //#define DEBUG
 #include <iostream>
-#include "Mould.hpp"
-#include "GLutil.hpp"
+#include "rubik.hpp"
 #include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-namespace globals {
-  extern GLuint vao_model;
-  extern GLutil::program prog_model;
-  extern GLuint all_matrices;
-  extern GLuint this_matrix;
-  extern std::vector<Vertex> centers;
-  extern std::vector<GLvoid*> starts;
-  extern std::vector<GLsizei> counts;
-  extern std::vector<glm::mat4> matrices;
-  extern glm::vec2 buttondown_loc;
-  extern glm::vec2 window_size;
-  extern bool buttondown;
-  extern glm::mat4 proj;
-  extern glm::mat4 view;
-  extern glm::mat4 model;
-  extern struct UM {
-    GLint submodel;
-    GLint view;
-    GLint proj;
-    GLint texture;
-  } uniforms_model;
-  extern size_t piece_count;
-}
-
-struct Cut {
-  Plane plane;
-  Index tag;
-};
-
-void init_program();
-Volume init_shape(float size, const std::vector<Cut>& cuts);
-void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::vector<glm::vec4>& colour_vals);
-void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts);
-
-void update_proj(int w, int h);
-void rotate_model(glm::vec2 loc, bool rewrite);
-
-void draw();
 
 #ifdef DEBUG
 void report(const std::string& r) {
@@ -62,22 +19,24 @@ glm::vec2 touch_location(GLFWwindow* window) {
 }
 
 void resize_cb(GLFWwindow* window, int w, int h) {
+  Context& ctx = *static_cast<Context*>(glfwGetWindowUserPointer(window));
   if(w == 0 && h == 0)
     glfwGetFramebufferSize(window, &w, &h);
-  update_proj(w, h);
+  update_proj(ctx, w, h);
 }
 
 void button_cb(GLFWwindow* window, int, int action, int) {
+  Context& ctx = *static_cast<Context*>(glfwGetWindowUserPointer(window));
   if(action == GLFW_PRESS) {
-    globals::buttondown = true;
+    ctx.buttondown = true;
     double x, y;
     glfwGetCursorPos(window, &x, &y);
-    globals::buttondown_loc = glm::vec2{x, y};
+    ctx.buttondown_loc = glm::vec2{x, y};
   } else {
-    globals::buttondown = false;
+    ctx.buttondown = false;
     double x, y;
     glfwGetCursorPos(window, &x, &y);
-    rotate_model(touch_location(window), true);
+    rotate_model(ctx, touch_location(window), true);
   }
 }
 
@@ -135,11 +94,14 @@ int main() {
 
   try {
     GLFWwindow* window = init_glfw();
+    Context ctx{};
+    glfwSetWindowUserPointer(window, static_cast<void*>(&ctx));
+
     GLutil::initGLEW();
-    init_program();
-    Volume shape = init_shape(2, shape_cuts);
-    init_model(shape, cuts, colours);
-    init_cubemap(tex_cubemap, shape, shape_cuts, cuts);
+    init_program(ctx);
+    Volume shape = init_shape(ctx, 2, shape_cuts);
+    init_model(ctx, shape, cuts, colours);
+    init_cubemap(ctx, tex_cubemap, shape, shape_cuts, cuts);
 
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
@@ -147,9 +109,9 @@ int main() {
 
     resize_cb(window, 0, 0);
     while(!glfwWindowShouldClose(window)) {
-      if(globals::buttondown)
-        rotate_model(touch_location(window), false);
-      draw();
+      if(ctx.buttondown)
+        rotate_model(ctx, touch_location(window), false);
+      draw(ctx);
       glfwSwapBuffers(window);
       glfwPollEvents();
     }
