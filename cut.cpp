@@ -16,8 +16,14 @@ namespace globals {
   std::vector<GLvoid*> starts;
   std::vector<GLsizei> counts;
   std::vector<glm::mat4> matrices;
+  glm::vec2 buttondown_loc;
+  glm::vec2 window_size;
+  bool buttondown;
+  glm::mat4 proj;
+  glm::mat4 view;
+  glm::mat4 model;
   struct {
-    GLint model;
+    GLint submodel;
     GLint view;
     GLint proj;
     GLint texture;
@@ -40,17 +46,36 @@ void report(const std::string& r) {
 }
 #endif
 
+glm::vec2 touch_location(GLFWwindow* window) {
+  double x, y;
+  glfwGetCursorPos(window, &x, &y);
+  return glm::vec2{x, y};
+}
+
+glm::mat4 model_rotated(glm::vec2 loc) {
+  loc -= globals::buttondown_loc;
+  loc /= globals::window_size/2.f;
+  glm::vec2 last_two = []() -> auto {
+    glm::vec4 v{globals::proj * glm::vec4{0, 0, 1, 1}};
+    return glm::vec2{v.z, v.w};
+  }();
+  glm::vec2 modelcoord = glm::vec2{inverse(globals::proj) * glm::vec4{loc, last_two}};
+  return glm::rotate(
+      glm::rotate(
+        glm::mat4{},
+        -modelcoord.x, {0, 1, 0}),
+      -modelcoord.y, {1, 0, 0}) * globals::model;
+}
+
+void update_matrix(const glm::mat4 model, bool rewrite) {
+  glUseProgram(globals::prog_model);
+  glUniformMatrix4fv(globals::uniforms_model.view, 1, GL_FALSE, glm::value_ptr(globals::view * model));
+  if(rewrite)
+    globals::model = model;
+}
+
 void draw(GLFWwindow* window) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glm::mat4 modelview = glm::rotate(
-      glm::rotate(
-        glm::scale(
-          glm::translate(
-            glm::mat4{},
-            glm::vec3(0, 0, 3)),
-          glm::vec3(1)),
-        -0.3f, glm::vec3{1, 0, 0}),
-      -globals::time, glm::vec3{0, 1, 0});
 
   Plane cut{{-1, 1, 1}, 0};
   for(size_t i = 0; i < globals::piece_count; i++)
@@ -59,9 +84,8 @@ void draw(GLFWwindow* window) {
 
   glUseProgram(globals::prog_model);
   glBindVertexArray(globals::vao_model);
-  glUniformMatrix4fv(globals::uniforms_model.view, 1, GL_FALSE, glm::value_ptr(modelview));
   for(size_t i = 0; i < globals::piece_count; i++) {
-    glUniformMatrix4fv(globals::uniforms_model.model, 1, GL_FALSE, glm::value_ptr(globals::matrices[i]));
+    glUniformMatrix4fv(globals::uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(globals::matrices[i]));
     glDrawElements(GL_TRIANGLES, globals::counts[i], GL_UNSIGNED_SHORT, globals::starts[i]);
   }
 
@@ -74,13 +98,28 @@ void resize_cb(GLFWwindow* window, int w, int h) {
     glfwGetFramebufferSize(window, &w, &h);
   glViewport(0, 0, w, h);
   float ratio = (float)w / h;
-  glm::mat4 proj{
+  globals::proj = glm::mat4{
     {w > h ? 1/ratio : 1, 0, 0, 0},
     {0, w < h ? ratio : 1, 0, 0},
     {0, 0, .1, .2},
     {0, 0, 0, 1}};
   glUseProgram(globals::prog_model);
-  glUniformMatrix4fv(globals::uniforms_model.proj, 1, GL_FALSE, glm::value_ptr(proj));
+  glUniformMatrix4fv(globals::uniforms_model.proj, 1, GL_FALSE, glm::value_ptr(globals::proj));
+  globals::window_size = glm::vec2{w, h};
+}
+
+void button_cb(GLFWwindow* window, int, int action, int) {
+  if(action == GLFW_PRESS) {
+    globals::buttondown = true;
+    double x, y;
+    glfwGetCursorPos(window, &x, &y);
+    globals::buttondown_loc = glm::vec2{x, y};
+  } else {
+    globals::buttondown = false;
+    double x, y;
+    glfwGetCursorPos(window, &x, &y);
+    update_matrix(model_rotated(touch_location(window)), true);
+  }
 }
 
 void append_face_list(std::vector<Index>& indices, size_t base, const std::vector<Face>& faces) {
@@ -112,8 +151,9 @@ GLFWwindow* init_glfw() {
   GLFWwindow* window = glfwCreateWindow(640, 480, "Title", NULL, NULL);
   if(!window)
     throw std::runtime_error("glfwCreateWindow failed");
-  glfwSetCharCallback(window, &key_cb);
-  glfwSetFramebufferSizeCallback(window, &resize_cb);
+  glfwSetCharCallback(window, key_cb);
+  glfwSetFramebufferSizeCallback(window, resize_cb);
+  glfwSetMouseButtonCallback(window, button_cb);
   glfwMakeContextCurrent(window);
   return window;
 }
@@ -123,7 +163,7 @@ void init_program() {
   globals::prog_model = GLutil::program{
     GLutil::shader{"cut.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
     GLutil::shader{"cut.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
-  globals::uniforms_model.model = glGetUniformLocation(globals::prog_model, "model");
+  globals::uniforms_model.submodel = glGetUniformLocation(globals::prog_model, "model");
   globals::uniforms_model.view = glGetUniformLocation(globals::prog_model, "view");
   globals::uniforms_model.proj = glGetUniformLocation(globals::prog_model, "proj");
   globals::uniforms_model.texture = glGetUniformLocation(globals::prog_model, "sampler");
@@ -216,6 +256,14 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
+
+  globals::view = glm::translate(glm::mat4{}, glm::vec3(0, 0, 3));
+  globals::model = glm::rotate(
+      glm::rotate(
+        glm::mat4{},
+        -0.3f, glm::vec3{1, 0, 0}),
+      -1.f, glm::vec3{0, 1, 0});
+  update_matrix(globals::model, true);
 }
 
 void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts) {
@@ -414,6 +462,8 @@ int main() {
 
     resize_cb(window, 0, 0);
     while(!glfwWindowShouldClose(window)) {
+      if(globals::buttondown)
+        update_matrix(model_rotated(touch_location(window)), false);
       draw(window);
       glfwPollEvents();
     }
