@@ -1,3 +1,6 @@
+#ifndef MOULD_HPP
+#define MOULD_HPP
+
 #include <cstddef> // size_t
 #include <cstdint> // uint16_t
 #include <iterator>
@@ -447,3 +450,5 @@ public:
     return volumes;
   }
 };
+
+#endif

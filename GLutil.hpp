@@ -1,3 +1,6 @@
+#ifndef GLUTIL_HPP
+#define GLUTIL_HPP
+
 #include <GL/glew.h>
 #include <fstream>
 #include <sstream>
@@ -217,3 +220,5 @@ namespace GLutil {
   };
 
 }
+
+#endif

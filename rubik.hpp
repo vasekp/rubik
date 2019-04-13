@@ -1,3 +1,6 @@
+#ifndef RUBIK_HPP
+#define RUBIK_HPP
+
 #include "Mould.hpp"
 #include "GLutil.hpp"
 #include <glm/glm.hpp>
@@ -37,3 +40,5 @@ void update_proj(Context& ctx, int w, int h);
 void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite);
 
 void draw(Context& ctx);
+
+#endif
