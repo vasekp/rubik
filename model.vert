@@ -2,8 +2,8 @@
 
 precision mediump float;
 
-uniform mat4 model;
-uniform mat4 view;
+uniform mat4 submodel;
+uniform mat4 modelview;
 uniform mat4 proj;
 
 in vec3 in_coords;
@@ -16,8 +16,8 @@ out vec4 normal;
 out vec4 faceColour;
 
 void main() {
-  coords = view * model * vec4(in_coords, 1);
-  normal = view * model * vec4(in_normal, 0);
+  coords = modelview * submodel * vec4(in_coords, 1);
+  normal = modelview * submodel * vec4(in_normal, 0);
   texCoord = in_coords;
   faceColour = in_colour;
   gl_Position = proj * coords;

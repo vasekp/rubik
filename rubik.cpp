@@ -1,11 +1,13 @@
 //#define DEBUG
-#include <iostream>
 #include "Mould.hpp"
 #include "GLutil.hpp"
-#include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+#ifdef DEBUG
+#include <iostream>
+#endif
 
 namespace globals {
   GLuint vao_model;
@@ -22,14 +24,13 @@ namespace globals {
   glm::mat4 proj;
   glm::mat4 view;
   glm::mat4 model;
-  struct {
+  struct UM {
     GLint submodel;
-    GLint view;
+    GLint modelview;
     GLint proj;
     GLint texture;
   } uniforms_model;
   size_t piece_count;
-  float time = 0;
 }
 
 struct Cut {
@@ -37,65 +38,7 @@ struct Cut {
   Index tag;
 };
 
-#ifdef DEBUG
-void report(const std::string& r) {
-  std::cout << std::hex;
-  while(auto e = glGetError()) {
-    std::cout << r << ": " << e << '\n';
-  }
-}
-#endif
-
-glm::vec2 touch_location(GLFWwindow* window) {
-  double x, y;
-  glfwGetCursorPos(window, &x, &y);
-  return glm::vec2{x, y};
-}
-
-glm::mat4 model_rotated(glm::vec2 loc) {
-  loc -= globals::buttondown_loc;
-  loc /= globals::window_size/2.f;
-  glm::vec2 last_two = []() -> auto {
-    glm::vec4 v{globals::proj * glm::vec4{0, 0, 1, 1}};
-    return glm::vec2{v.z, v.w};
-  }();
-  glm::vec2 modelcoord = glm::vec2{inverse(globals::proj) * glm::vec4{loc, last_two}};
-  return glm::rotate(
-      glm::rotate(
-        glm::mat4{},
-        -modelcoord.x, {0, 1, 0}),
-      -modelcoord.y, {1, 0, 0}) * globals::model;
-}
-
-void update_matrix(const glm::mat4 model, bool rewrite) {
-  glUseProgram(globals::prog_model);
-  glUniformMatrix4fv(globals::uniforms_model.view, 1, GL_FALSE, glm::value_ptr(globals::view * model));
-  if(rewrite)
-    globals::model = model;
-}
-
-void draw(GLFWwindow* window) {
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-  Plane cut{{-1, 1, 1}, 0};
-  for(size_t i = 0; i < globals::piece_count; i++)
-    if(globals::centers[i] * cut > 0)
-      globals::matrices[i] = glm::rotate(globals::matrices[i], 0.01f, cut.normal);
-
-  glUseProgram(globals::prog_model);
-  glBindVertexArray(globals::vao_model);
-  for(size_t i = 0; i < globals::piece_count; i++) {
-    glUniformMatrix4fv(globals::uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(globals::matrices[i]));
-    glDrawElements(GL_TRIANGLES, globals::counts[i], GL_UNSIGNED_SHORT, globals::starts[i]);
-  }
-
-  glfwSwapBuffers(window);
-  globals::time += 0.005;
-}
-
-void resize_cb(GLFWwindow* window, int w, int h) {
-  if(w == 0 && h == 0)
-    glfwGetFramebufferSize(window, &w, &h);
+void update_proj(int w, int h) {
   glViewport(0, 0, w, h);
   float ratio = (float)w / h;
   globals::proj = glm::mat4{
@@ -108,17 +51,38 @@ void resize_cb(GLFWwindow* window, int w, int h) {
   globals::window_size = glm::vec2{w, h};
 }
 
-void button_cb(GLFWwindow* window, int, int action, int) {
-  if(action == GLFW_PRESS) {
-    globals::buttondown = true;
-    double x, y;
-    glfwGetCursorPos(window, &x, &y);
-    globals::buttondown_loc = glm::vec2{x, y};
-  } else {
-    globals::buttondown = false;
-    double x, y;
-    glfwGetCursorPos(window, &x, &y);
-    update_matrix(model_rotated(touch_location(window)), true);
+void rotate_model(glm::vec2 loc, bool rewrite) {
+  loc -= globals::buttondown_loc;
+  loc /= globals::window_size/2.f;
+  glm::vec2 last_two = []() -> auto {
+    glm::vec4 v{globals::proj * glm::vec4{0, 0, 1, 1}};
+    return glm::vec2{v.z, v.w};
+  }();
+  glm::vec2 modelcoord = glm::vec2{inverse(globals::proj) * glm::vec4{loc, last_two}};
+  glm::mat4 model = glm::rotate(
+      glm::rotate(
+        glm::mat4{},
+        -modelcoord.x, {0, 1, 0}),
+      -modelcoord.y, {1, 0, 0}) * globals::model;
+  glUseProgram(globals::prog_model);
+  glUniformMatrix4fv(globals::uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(globals::view * model));
+  if(rewrite)
+    globals::model = model;
+}
+
+void draw() {
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  Plane cut{{-1, 1, 1}, 0};
+  for(size_t i = 0; i < globals::piece_count; i++)
+    if(globals::centers[i] * cut > 0)
+      globals::matrices[i] = glm::rotate(globals::matrices[i], 0.01f, cut.normal);
+
+  glUseProgram(globals::prog_model);
+  glBindVertexArray(globals::vao_model);
+  for(size_t i = 0; i < globals::piece_count; i++) {
+    glUniformMatrix4fv(globals::uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(globals::matrices[i]));
+    glDrawElements(GL_TRIANGLES, globals::counts[i], GL_UNSIGNED_SHORT, globals::starts[i]);
   }
 }
 
@@ -137,34 +101,12 @@ void append_face_list(std::vector<Index>& indices, size_t base, const std::vecto
   }
 }
 
-void key_cb(GLFWwindow *window, unsigned key) {
-  if(key == 'q')
-    glfwSetWindowShouldClose(window, GLFW_TRUE);
-}
-
-GLFWwindow* init_glfw() {
-  if(!glfwInit())
-    throw std::runtime_error("glfwInit failed\n");;
-  glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-  GLFWwindow* window = glfwCreateWindow(640, 480, "Title", NULL, NULL);
-  if(!window)
-    throw std::runtime_error("glfwCreateWindow failed");
-  glfwSetCharCallback(window, key_cb);
-  glfwSetFramebufferSizeCallback(window, resize_cb);
-  glfwSetMouseButtonCallback(window, button_cb);
-  glfwMakeContextCurrent(window);
-  return window;
-}
-
-
 void init_program() {
   globals::prog_model = GLutil::program{
-    GLutil::shader{"cut.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
-    GLutil::shader{"cut.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
-  globals::uniforms_model.submodel = glGetUniformLocation(globals::prog_model, "model");
-  globals::uniforms_model.view = glGetUniformLocation(globals::prog_model, "view");
+    GLutil::shader{"model.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
+    GLutil::shader{"model.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
+  globals::uniforms_model.submodel = glGetUniformLocation(globals::prog_model, "submodel");
+  globals::uniforms_model.modelview = glGetUniformLocation(globals::prog_model, "modelview");
   globals::uniforms_model.proj = glGetUniformLocation(globals::prog_model, "proj");
   globals::uniforms_model.texture = glGetUniformLocation(globals::prog_model, "sampler");
 }
@@ -263,7 +205,8 @@ void init_model(const Volume& shape, const std::vector<Plane>& cuts, const std::
         glm::mat4{},
         -0.3f, glm::vec3{1, 0, 0}),
       -1.f, glm::vec3{0, 1, 0});
-  update_matrix(globals::model, true);
+  glUseProgram(globals::prog_model);
+  glUniformMatrix4fv(globals::uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(globals::view * globals::model));
 }
 
 void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts) {
@@ -415,61 +358,4 @@ void init_cubemap(unsigned texUnit, const Volume& main_volume, const std::vector
   glBlendEquation(GL_FUNC_ADD);
   glDisable(GL_BLEND);
   glClearColor(0, 0, 0, 1);
-}
-
-int main() {
-  constexpr unsigned tex_cubemap = 0;
-
-  std::vector<Cut> shape_cuts{
-    {{{1, 0, 0}, 1}, 1},
-    {{{0, 1, 0}, 1}, 2},
-    {{{0, 0, 1}, 1}, 3},
-    {{{-1, 0, 0}, 1}, 4},
-    {{{0, -1, 0}, 1}, 5},
-    {{{0, 0, -1}, 1}, 6},
-    {{{1, 1, 1}, 1}, 7}
-  };
-
-  std::vector<Plane> cuts{
-    {{1, 1, 1}, 0},
-    {{-1, 1, 1}, 0},
-    {{-1, 1, -1}, 0},
-    {{1, 1, -1}, 0}
-  };
-
-  std::vector<glm::vec4> colours{
-    {0, 0, 0, 0},
-    {1, 0, 0, 1},
-    {0, 1, 0, 1},
-    {0, 0, 1, 1},
-    {1, 0, 0, 1},
-    {0, 1, 0, 1},
-    {0, 0, 1, 1},
-    {1, 1, 0, 1},
-  };
-
-  try {
-    GLFWwindow* window = init_glfw();
-    GLutil::initGLEW();
-    init_program();
-    Volume shape = init_shape(2, shape_cuts);
-    init_model(shape, cuts, colours);
-    init_cubemap(tex_cubemap, shape, shape_cuts, cuts);
-
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-    glEnable(GL_DEPTH_TEST);
-
-    resize_cb(window, 0, 0);
-    while(!glfwWindowShouldClose(window)) {
-      if(globals::buttondown)
-        update_matrix(model_rotated(touch_location(window)), false);
-      draw(window);
-      glfwPollEvents();
-    }
-  } catch(const std::runtime_error& e) {
-    std::cout.flush();
-    std::cerr << e.what() << '\n';
-  }
-  glfwTerminate();
 }
