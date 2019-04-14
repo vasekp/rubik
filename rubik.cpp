@@ -4,48 +4,48 @@
 void update_proj(Context& ctx, int w, int h) {
   glViewport(0, 0, w, h);
   float ratio = (float)w / h;
-  ctx.proj = glm::mat4{
+  ctx.mxs.proj = glm::mat4{
     {w > h ? 1/ratio : 1, 0, 0, 0},
     {0, w < h ? ratio : 1, 0, 0},
     {0, 0, .1, .2},
     {0, 0, 0, 1}};
-  glUseProgram(ctx.prog_model);
-  glUniformMatrix4fv(ctx.uniforms_model.proj, 1, GL_FALSE, glm::value_ptr(ctx.proj));
-  ctx.window_size = glm::vec2{w, h};
+  glUseProgram(ctx.gl.prog_model);
+  glUniformMatrix4fv(ctx.gl.uniforms_model.proj, 1, GL_FALSE, glm::value_ptr(ctx.mxs.proj));
+  ctx.ui.window_size = glm::vec2{w, h};
 }
 
 void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite) {
-  loc -= ctx.buttondown_loc;
-  loc /= ctx.window_size/2.f;
+  loc -= ctx.ui.buttondown_loc;
+  loc /= ctx.ui.window_size/2.f;
   glm::vec2 last_two = [&ctx]() -> auto {
-    glm::vec4 v{ctx.proj * glm::vec4{0, 0, 1, 1}};
+    glm::vec4 v{ctx.mxs.proj * glm::vec4{0, 0, 1, 1}};
     return glm::vec2{v.z, v.w};
   }();
-  glm::vec2 modelcoord = glm::vec2{inverse(ctx.proj) * glm::vec4{loc, last_two}};
+  glm::vec2 modelcoord = glm::vec2{inverse(ctx.mxs.proj) * glm::vec4{loc, last_two}};
   glm::mat4 model = glm::rotate(
       glm::rotate(
         glm::mat4{},
         -modelcoord.x, {0, 1, 0}),
-      -modelcoord.y, {1, 0, 0}) * ctx.model;
-  glUseProgram(ctx.prog_model);
-  glUniformMatrix4fv(ctx.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.view * model));
+      -modelcoord.y, {1, 0, 0}) * ctx.mxs.model;
+  glUseProgram(ctx.gl.prog_model);
+  glUniformMatrix4fv(ctx.gl.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.mxs.view * model));
   if(rewrite)
-    ctx.model = model;
+    ctx.mxs.model = model;
 }
 
 void draw(Context& ctx) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   Plane cut{{-1, 1, 1}, 0};
-  for(size_t i = 0; i < ctx.piece_count; i++)
-    if(ctx.centers[i] * cut > 0)
-      ctx.matrices[i] = glm::rotate(ctx.matrices[i], 0.01f, cut.normal);
+  for(auto& piece : ctx.pieces)
+    if(piece.center * cut > 0)
+      piece.rotation = glm::rotate(piece.rotation, 0.01f, cut.normal);
 
-  glUseProgram(ctx.prog_model);
-  glBindVertexArray(ctx.vao_model);
-  for(size_t i = 0; i < ctx.piece_count; i++) {
-    glUniformMatrix4fv(ctx.uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(ctx.matrices[i]));
-    glDrawElements(GL_TRIANGLES, ctx.counts[i], GL_UNSIGNED_SHORT, ctx.starts[i]);
+  glUseProgram(ctx.gl.prog_model);
+  glBindVertexArray(ctx.gl.vao_model);
+  for(auto& piece : ctx.pieces) {
+    glUniformMatrix4fv(ctx.gl.uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(piece.rotation));
+    glDrawElements(GL_TRIANGLES, piece.gl_count, GL_UNSIGNED_SHORT, piece.gl_start);
   }
 }
 
@@ -65,13 +65,13 @@ void append_face_list(std::vector<Index>& indices, size_t base, const std::vecto
 }
 
 void init_program(Context& ctx) {
-  ctx.prog_model = GLutil::program{
+  ctx.gl.prog_model = GLutil::program{
     GLutil::shader{"model.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
     GLutil::shader{"model.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
-  ctx.uniforms_model.submodel = glGetUniformLocation(ctx.prog_model, "submodel");
-  ctx.uniforms_model.modelview = glGetUniformLocation(ctx.prog_model, "modelview");
-  ctx.uniforms_model.proj = glGetUniformLocation(ctx.prog_model, "proj");
-  ctx.uniforms_model.texture = glGetUniformLocation(ctx.prog_model, "sampler");
+  ctx.gl.uniforms_model.submodel = glGetUniformLocation(ctx.gl.prog_model, "submodel");
+  ctx.gl.uniforms_model.modelview = glGetUniformLocation(ctx.gl.prog_model, "modelview");
+  ctx.gl.uniforms_model.proj = glGetUniformLocation(ctx.gl.prog_model, "proj");
+  ctx.gl.uniforms_model.texture = glGetUniformLocation(ctx.gl.prog_model, "sampler");
 }
 
 Volume init_shape(Context&, float size, const std::vector<Cut>& cuts) {
@@ -91,12 +91,9 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
   std::vector<glm::vec4> colours{};
   std::vector<Index> indices{};
 
-  ctx.starts.resize(0);
-  ctx.counts.resize(0);
-  ctx.centers.resize(0);
-
+  ctx.pieces.resize(0);
   for(auto& volume : m.get_volumes()) {
-    ExtVolume ext(std::move(volume), 0.03);
+    ExtVolume ext(volume, 0.03);
     size_t base = coords.size();
     size_t indexBase = indices.size();
     const auto& vertices = ext.get_vertices();
@@ -107,26 +104,26 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
     }
     append_face_list(indices, base, ext.get_faces());
     append_face_list(indices, base, ext.get_ext_faces());
-    ctx.starts.push_back(reinterpret_cast<void*>(indexBase * sizeof(Index)));
-    ctx.counts.push_back(indices.size() - indexBase);
-    ctx.centers.push_back(volume.center());
+    ctx.pieces.push_back({
+        volume,
+        volume.center(),
+        glm::mat4{},
+        reinterpret_cast<void*>(indexBase * sizeof(Index)),
+        static_cast<GLint>(indices.size() - indexBase)});
   }
-  ctx.piece_count = m.get_volumes().size();
-  ctx.matrices.resize(ctx.piece_count);
-  std::fill(begin(ctx.matrices), end(ctx.matrices), glm::mat4{});
 
   struct {
     GLint coords;
     GLint normal;
     GLint colour;
   } attribs = {
-    glGetAttribLocation(ctx.prog_model, "in_coords"),
-    glGetAttribLocation(ctx.prog_model, "in_normal"),
-    glGetAttribLocation(ctx.prog_model, "in_colour")
+    glGetAttribLocation(ctx.gl.prog_model, "in_coords"),
+    glGetAttribLocation(ctx.gl.prog_model, "in_normal"),
+    glGetAttribLocation(ctx.gl.prog_model, "in_colour")
   };
 
-  glGenVertexArrays(1, &ctx.vao_model);
-  glBindVertexArray(ctx.vao_model);
+  glGenVertexArrays(1, &ctx.gl.vao_model);
+  glBindVertexArray(ctx.gl.vao_model);
 
   enum {
     COORDS_VBO,
@@ -155,14 +152,14 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
 
-  ctx.view = glm::translate(glm::mat4{}, glm::vec3(0, 0, 3));
-  ctx.model = glm::rotate(
+  ctx.mxs.view = glm::translate(glm::mat4{}, glm::vec3(0, 0, 3));
+  ctx.mxs.model = glm::rotate(
       glm::rotate(
         glm::mat4{},
         -0.3f, glm::vec3{1, 0, 0}),
       -1.f, glm::vec3{0, 1, 0});
-  glUseProgram(ctx.prog_model);
-  glUniformMatrix4fv(ctx.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.view * ctx.model));
+  glUseProgram(ctx.gl.prog_model);
+  glUniformMatrix4fv(ctx.gl.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.mxs.view * ctx.mxs.model));
 }
 
 void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts) {
@@ -305,8 +302,8 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
   }
 
   glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
-  glUseProgram(ctx.prog_model);
-  glUniform1i(ctx.uniforms_model.texture, texUnit);
+  glUseProgram(ctx.gl.prog_model);
+  glUniform1i(ctx.gl.uniforms_model.texture, texUnit);
 
   // reset to sensible state
 

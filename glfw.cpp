@@ -19,12 +19,12 @@ void resize_cb(GLFWwindow* window, int w, int h) {
 void button_cb(GLFWwindow* window, int, int action, int) {
   Context& ctx = *static_cast<Context*>(glfwGetWindowUserPointer(window));
   if(action == GLFW_PRESS) {
-    ctx.buttondown = true;
+    ctx.ui.buttondown = true;
     double x, y;
     glfwGetCursorPos(window, &x, &y);
-    ctx.buttondown_loc = glm::vec2{x, y};
+    ctx.ui.buttondown_loc = glm::vec2{x, y};
   } else {
-    ctx.buttondown = false;
+    ctx.ui.buttondown = false;
     double x, y;
     glfwGetCursorPos(window, &x, &y);
     rotate_model(ctx, touch_location(window), true);
@@ -106,7 +106,7 @@ int main() {
 
     resize_cb(window, 0, 0);
     while(!glfwWindowShouldClose(window)) {
-      if(ctx.buttondown)
+      if(ctx.ui.buttondown)
         rotate_model(ctx, touch_location(window), false);
       draw(ctx);
       glfwSwapBuffers(window);

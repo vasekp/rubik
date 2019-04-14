@@ -7,28 +7,36 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+struct Piece {
+  Volume volume;
+  Vertex center;
+  glm::mat4 rotation;
+  GLvoid* gl_start;
+  GLsizei gl_count;
+};
+
 struct Context {
-  GLuint vao_model;
-  GLutil::program prog_model;
-  GLuint all_matrices;
-  GLuint this_matrix;
-  std::vector<Vertex> centers;
-  std::vector<GLvoid*> starts;
-  std::vector<GLsizei> counts;
-  std::vector<glm::mat4> matrices;
-  glm::vec2 buttondown_loc;
-  glm::vec2 window_size;
-  bool buttondown;
-  glm::mat4 proj;
-  glm::mat4 view;
-  glm::mat4 model;
   struct {
-    GLint submodel;
-    GLint modelview;
-    GLint proj;
-    GLint texture;
-  } uniforms_model;
-  size_t piece_count;
+    GLuint vao_model;
+    GLutil::program prog_model;
+    struct {
+      GLint submodel;
+      GLint modelview;
+      GLint proj;
+      GLint texture;
+    } uniforms_model;
+  } gl;
+  struct {
+    glm::mat4 proj;
+    glm::mat4 view;
+    glm::mat4 model;
+  } mxs;
+  struct {
+    glm::vec2 buttondown_loc;
+    glm::vec2 window_size;
+    bool buttondown;
+  } ui;
+  std::vector<Piece> pieces;
 };
 
 void init_program(Context& ctx);
