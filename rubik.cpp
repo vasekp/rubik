@@ -139,10 +139,11 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
     COORDS_VBO,
     NORMALS_VBO,
     COLOURS_VBO,
-    INDICES_IBO
+    INDICES_IBO,
+    BUFFER_COUNT
   };
-  GLuint buffers[4];
-  glGenBuffers(4, &buffers[0]);
+  GLuint buffers[BUFFER_COUNT];
+  glGenBuffers(BUFFER_COUNT, &buffers[0]);
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, coords.size() * sizeof(coords[0]), coords.data(), GL_STATIC_DRAW);
@@ -276,10 +277,11 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
   enum {
     COORDS_VBO,
     TAGS_VBO,
-    INDICES_IBO
+    INDICES_IBO,
+    BUFFER_COUNT
   };
-  GLuint buffers[3];
-  glGenBuffers(3, &buffers[0]);
+  GLuint buffers[BUFFER_COUNT];
+  glGenBuffers(BUFFER_COUNT, &buffers[0]);
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, ext.get_vertices().size() * sizeof(Vertex), &ext.get_vertices()[0], GL_STATIC_DRAW);
@@ -340,11 +342,12 @@ void init_click_target(Context& ctx) {
 
   enum {
     TAG,
-    DEPTH
+    DEPTH,
+    BUFFER_COUNT
   };
 
-  GLuint renderbuffers[2];
-  glGenRenderbuffers(2, &renderbuffers[0]);
+  GLuint renderbuffers[BUFFER_COUNT];
+  glGenRenderbuffers(BUFFER_COUNT, &renderbuffers[0]);
 
   glBindRenderbuffer(GL_RENDERBUFFER, renderbuffers[TAG]);
   glRenderbufferStorage(GL_RENDERBUFFER, GL_R32I, 1, 1);
