@@ -6,7 +6,9 @@
 glm::vec2 touch_location(GLFWwindow* window) {
   double x, y;
   glfwGetCursorPos(window, &x, &y);
-  return glm::vec2{x, y};
+  int w, h;
+  glfwGetFramebufferSize(window, &w, &h);
+  return glm::vec2{float(x/w), -float(y/h)} * 2.f - glm::vec2(1, -1);
 }
 
 void resize_cb(GLFWwindow* window, int w, int h) {
@@ -20,9 +22,7 @@ void button_cb(GLFWwindow* window, int, int action, int) {
   Context& ctx = *static_cast<Context*>(glfwGetWindowUserPointer(window));
   if(action == GLFW_PRESS) {
     ctx.ui.buttondown = true;
-    double x, y;
-    glfwGetCursorPos(window, &x, &y);
-    ctx.ui.buttondown_loc = glm::vec2{x, y};
+    ctx.ui.buttondown_loc = touch_location(window);
   } else {
     ctx.ui.buttondown = false;
     double x, y;

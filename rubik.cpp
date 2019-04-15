@@ -11,12 +11,10 @@ void update_proj(Context& ctx, int w, int h) {
     {0, 0, 0, 1}};
   glUseProgram(ctx.gl.prog_model);
   glUniformMatrix4fv(ctx.gl.uniforms_model.proj, 1, GL_FALSE, glm::value_ptr(ctx.mxs.proj));
-  ctx.ui.window_size = glm::vec2{w, h};
 }
 
 void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite) {
   loc -= ctx.ui.buttondown_loc;
-  loc /= ctx.ui.window_size/2.f;
   glm::vec2 last_two = [&ctx]() -> auto {
     glm::vec4 v{ctx.mxs.proj * glm::vec4{0, 0, 1, 1}};
     return glm::vec2{v.z, v.w};
@@ -26,7 +24,7 @@ void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite) {
       glm::rotate(
         glm::mat4{},
         -modelcoord.x, {0, 1, 0}),
-      -modelcoord.y, {1, 0, 0}) * ctx.mxs.model;
+      modelcoord.y, {1, 0, 0}) * ctx.mxs.model;
   glUseProgram(ctx.gl.prog_model);
   glUniformMatrix4fv(ctx.gl.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.mxs.view * model));
   if(rewrite)

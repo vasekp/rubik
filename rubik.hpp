@@ -33,7 +33,6 @@ struct Context {
   } mxs;
   struct {
     glm::vec2 buttondown_loc;
-    glm::vec2 window_size;
     bool buttondown;
   } ui;
   std::vector<Piece> pieces;
