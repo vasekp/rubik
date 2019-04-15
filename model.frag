@@ -3,6 +3,7 @@
 precision mediump float;
 
 uniform samplerCube sampler;
+uniform bool highlight;
 
 in vec4 coords;
 in vec3 texCoord;
@@ -26,4 +27,6 @@ void main() {
   float specular_base = dot(-npos, nnormal) > 0.0 ? max(dot(-npos, -reflect(light_dir, nnormal)), 0.0) : 0.0;
   vec3 specular = vec3(pow(specular_base, shininess));
   colour = vec4(mix(diffuse, specular, mix_specular), 1);
+  if(highlight)
+    colour.rgb *= 2.f;
 }

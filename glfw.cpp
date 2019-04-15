@@ -95,10 +95,11 @@ int main() {
     glfwSetWindowUserPointer(window, static_cast<void*>(&ctx));
 
     GLutil::initGLEW();
-    init_program(ctx);
+    init_programs(ctx);
     Volume shape = init_shape(ctx, 2, shape_cuts);
     init_model(ctx, shape, cuts, colours);
     init_cubemap(ctx, tex_cubemap, shape, shape_cuts, cuts);
+    init_click_target(ctx);
 
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
@@ -106,9 +107,10 @@ int main() {
 
     resize_cb(window, 0, 0);
     while(!glfwWindowShouldClose(window)) {
+      glm::vec2 loc = touch_location(window);
       if(ctx.ui.buttondown)
-        rotate_model(ctx, touch_location(window), false);
-      draw(ctx);
+        rotate_model(ctx, loc, false);
+      draw(ctx, get_click_volume(ctx, loc));
       glfwSwapBuffers(window);
       glfwPollEvents();
     }

@@ -2,7 +2,7 @@
 #include "rubik.hpp"
 
 void update_proj(Context& ctx, int w, int h) {
-  glViewport(0, 0, w, h);
+  ctx.gl.viewport = {w, h};
   float ratio = (float)w / h;
   ctx.mxs.proj = glm::mat4{
     {w > h ? 1/ratio : 1, 0, 0, 0},
@@ -31,7 +31,8 @@ void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite) {
     ctx.mxs.model = model;
 }
 
-void draw(Context& ctx) {
+void draw(Context& ctx, int t) {
+  glViewport(0, 0, ctx.gl.viewport.w, ctx.gl.viewport.h);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   Plane cut{{-1, 1, 1}, 0};
@@ -41,8 +42,10 @@ void draw(Context& ctx) {
 
   glUseProgram(ctx.gl.prog_model);
   glBindVertexArray(ctx.gl.vao_model);
+  int tag = 0;
   for(auto& piece : ctx.pieces) {
     glUniformMatrix4fv(ctx.gl.uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(piece.rotation));
+    glUniform1i(ctx.gl.uniforms_model.highlight, ++tag == t ? GL_TRUE : GL_FALSE);
     glDrawElements(GL_TRIANGLES, piece.gl_count, GL_UNSIGNED_SHORT, piece.gl_start);
   }
 }
@@ -62,7 +65,7 @@ void append_face_list(std::vector<Index>& indices, size_t base, const std::vecto
   }
 }
 
-void init_program(Context& ctx) {
+void init_programs(Context& ctx) {
   ctx.gl.prog_model = GLutil::program{
     GLutil::shader{"model.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
     GLutil::shader{"model.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
@@ -70,6 +73,15 @@ void init_program(Context& ctx) {
   ctx.gl.uniforms_model.modelview = glGetUniformLocation(ctx.gl.prog_model, "modelview");
   ctx.gl.uniforms_model.proj = glGetUniformLocation(ctx.gl.prog_model, "proj");
   ctx.gl.uniforms_model.texture = glGetUniformLocation(ctx.gl.prog_model, "sampler");
+  ctx.gl.uniforms_model.highlight = glGetUniformLocation(ctx.gl.prog_model, "highlight");
+
+  ctx.gl.prog_click = GLutil::program{
+    GLutil::shader{"click.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
+    GLutil::shader{"click.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
+  ctx.gl.uniforms_click.matrix = glGetUniformLocation(ctx.gl.prog_click, "matrix");
+  ctx.gl.uniforms_click.submodel = glGetUniformLocation(ctx.gl.prog_click, "submodel");
+  ctx.gl.uniforms_click.location = glGetUniformLocation(ctx.gl.prog_click, "loc");
+  ctx.gl.uniforms_click.tag = glGetUniformLocation(ctx.gl.prog_click, "u_tag");
 }
 
 Volume init_shape(Context&, float size, const std::vector<Cut>& cuts) {
@@ -149,6 +161,17 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
+
+  // a simplified VAO for click event processing
+
+  glGenVertexArrays(1, &ctx.gl.vao_click);
+  glBindVertexArray(ctx.gl.vao_click);
+
+  GLint click_coords = glGetAttribLocation(ctx.gl.prog_click, "coords");
+  glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
+  glEnableVertexAttribArray(click_coords);
+  glVertexAttribPointer(click_coords, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
 
   ctx.mxs.view = glm::translate(glm::mat4{}, glm::vec3(0, 0, 3));
   ctx.mxs.model = glm::rotate(
@@ -309,4 +332,47 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
   glBlendEquation(GL_FUNC_ADD);
   glDisable(GL_BLEND);
   glClearColor(0, 0, 0, 1);
+}
+
+void init_click_target(Context& ctx) {
+  glGenFramebuffers(1, &ctx.gl.fb_click);
+  glBindFramebuffer(GL_FRAMEBUFFER, ctx.gl.fb_click);
+
+  enum {
+    TAG,
+    DEPTH
+  };
+
+  GLuint renderbuffers[2];
+  glGenRenderbuffers(2, &renderbuffers[0]);
+
+  glBindRenderbuffer(GL_RENDERBUFFER, renderbuffers[TAG]);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_R32I, 1, 1);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, renderbuffers[TAG]);
+
+  glBindRenderbuffer(GL_RENDERBUFFER, renderbuffers[DEPTH]);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, 1, 1);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, renderbuffers[DEPTH]);
+
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+GLint get_click_volume(Context& ctx, glm::vec2 point) {
+  glBindFramebuffer(GL_FRAMEBUFFER, ctx.gl.fb_click);
+  glViewport(0, 0, 1, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glUseProgram(ctx.gl.prog_click);
+  glBindVertexArray(ctx.gl.vao_click);
+  glUniformMatrix4fv(ctx.gl.uniforms_click.matrix, 1, GL_FALSE, glm::value_ptr(ctx.mxs.proj * ctx.mxs.view * ctx.mxs.model));
+  glUniform2fv(ctx.gl.uniforms_click.location, 1, glm::value_ptr(point));
+  glBindVertexArray(ctx.gl.vao_model);
+  GLint tag = 0;
+  for(auto& piece : ctx.pieces) {
+    glUniformMatrix4fv(ctx.gl.uniforms_click.submodel, 1, GL_FALSE, glm::value_ptr(piece.rotation));
+    glUniform1i(ctx.gl.uniforms_click.tag, ++tag);
+    glDrawElements(GL_TRIANGLES, piece.gl_count, GL_UNSIGNED_SHORT, piece.gl_start);
+  }
+  glReadPixels(0, 0, 1, 1, GL_RED_INTEGER, GL_INT, &tag);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  return tag;
 }
