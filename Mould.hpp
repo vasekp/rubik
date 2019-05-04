@@ -1,6 +1,7 @@
 #ifndef MOULD_HPP
 #define MOULD_HPP
 
+#include <cmath>
 #include <cstddef> // size_t
 #include <cstdint> // uint16_t
 #include <iterator>
@@ -136,9 +137,13 @@ public:
       Face fIn{f.normal, f.tag}, fOut{f.normal, f.tag};
       Vertex last = vertices[f.indices.back()];
       float ldot = last * p;
+      if(std::abs(ldot) < epsilon)
+        ldot = 0;
       for(auto ix : f.indices) {
         Vertex cur = vertices[ix];
         float dot = cur * p;
+        if(std::abs(dot) < epsilon)
+          dot = 0;
         if(ldot * dot < 0) {  // the edge intersects the plane
           auto intersect = (dot * last - ldot * cur)/(dot - ldot);
           auto newIx = find_or_append(intersect);
@@ -171,6 +176,11 @@ public:
     // take vertices from the original volume
     volIn.take_vertices_finalize(*this);
     volOut.take_vertices_finalize(*this);
+
+#ifdef DEBUG
+    volIn.dump();
+    volOut.dump();
+#endif
 
     std::swap(*this, volIn);
     return volOut;
@@ -440,10 +450,6 @@ public:
     }
     std::copy(std::make_move_iterator(begin(nvolumes)), std::make_move_iterator(end(nvolumes)),
         std::back_inserter(volumes));
-#ifdef DEBUG
-    for(const auto& v : volumes)
-      v.dump();
-#endif
   }
 
   const std::vector<Volume>& get_volumes() const {

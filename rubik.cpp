@@ -1,4 +1,3 @@
-//#define DEBUG
 #include "rubik.hpp"
 
 void update_proj(Context& ctx, int w, int h) {
@@ -34,12 +33,6 @@ void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite) {
 void draw(Context& ctx, int t) {
   glViewport(0, 0, ctx.gl.viewport.w, ctx.gl.viewport.h);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-  Plane cut{{-1, 1, 1}, 0};
-  for(auto& piece : ctx.pieces)
-    if(piece.center * cut > 0)
-      piece.rotation = glm::rotate(piece.rotation, 0.01f, cut.normal);
-
   glUseProgram(ctx.gl.prog_model);
   glBindVertexArray(ctx.gl.vao_model);
   int tag = 0;
@@ -91,7 +84,7 @@ Volume init_shape(Context&, float size, const std::vector<Cut>& cuts) {
   return shape;
 }
 
-void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cuts, const std::vector<glm::vec4>& colour_vals) {
+void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cuts, const std::vector<glm::vec4>& /*colour_vals*/) {
   Mould m{shape};
   for(const auto& plane : cuts)
     m.cut(plane);
@@ -110,7 +103,7 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
     std::copy(begin(vertices), end(vertices), std::back_inserter(coords));
     for(const auto& face : ext.get_faces()) {
       std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
-      std::fill_n(std::back_inserter(colours), face.indices.size(), colour_vals[face.tag]);
+      std::fill_n(std::back_inserter(colours), face.indices.size(), glm::vec4(1) /*colour_vals[face.tag]*/);
     }
     append_face_list(indices, base, ext.get_faces());
     append_face_list(indices, base, ext.get_ext_faces());
@@ -179,13 +172,13 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
       glm::rotate(
         glm::mat4{},
         -0.3f, glm::vec3{1, 0, 0}),
-      -1.f, glm::vec3{0, 1, 0});
+      -0.f, glm::vec3{0, 1, 0});
   glUseProgram(ctx.gl.prog_model);
   glUniformMatrix4fv(ctx.gl.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.mxs.view * ctx.mxs.model));
 }
 
 void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts) {
-  constexpr GLuint texSize = 512;
+  constexpr GLuint texSize = 1024;
 
   struct {
     GLenum face;

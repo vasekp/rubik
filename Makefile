@@ -1,8 +1,8 @@
 all: rubik
 
-HEADERS = Mould.hpp GLutil.hpp rubik.hpp
+HEADERS = Mould.hpp GLutil.hpp Permutation.hpp Group.hpp Solid.hpp rubik.hpp
 CXXFLAGS = -std=c++17 -g -Wall -Wextra -pedantic -fno-diagnostics-show-caret
-LIBS = -lGL -lGLEW -lglfw
+LIBS = -lGL -lGLEW -lglfw -lm
 
 rubik.o: rubik.cpp $(HEADERS)
 	g++ -c $(CXXFLAGS) $< -o $@

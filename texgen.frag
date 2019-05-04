@@ -11,7 +11,7 @@ flat in uint tag;
 out vec3 color;
 
 float cutoff(float q) {
-  return abs(q) < 0.04 ? 0.0 : 1.0;
+  return clamp((abs(q)-0.04)*300., 0., 1.);
 }
 
 void main() {

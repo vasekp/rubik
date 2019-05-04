@@ -3,6 +3,8 @@
 #include "rubik.hpp"
 #include <GLFW/glfw3.h>
 
+#include "Solid.hpp"
+
 glm::vec2 touch_location(GLFWwindow* window) {
   double x, y;
   glfwGetCursorPos(window, &x, &y);
@@ -61,33 +63,15 @@ GLFWwindow* init_glfw() {
 int main() {
   constexpr unsigned tex_cubemap = 0;
 
-  std::vector<Cut> shape_cuts{
-    {{{1, 0, 0}, 1}, 1},
-    {{{0, 1, 0}, 1}, 2},
-    {{{0, 0, 1}, 1}, 3},
-    {{{-1, 0, 0}, 1}, 4},
-    {{{0, -1, 0}, 1}, 5},
-    {{{0, 0, -1}, 1}, 6},
-    {{{1, 1, 1}, 1}, 7}
-  };
+  std::vector<Cut> shape_cuts{};
+  std::vector<Plane> cuts{};
 
-  std::vector<Plane> cuts{
-    {{1, 1, 1}, 0},
-    {{-1, 1, 1}, 0},
-    {{-1, 1, -1}, 0},
-    {{1, 1, -1}, 0}
-  };
-
-  std::vector<glm::vec4> colours{
-    {0, 0, 0, 0},
-    {1, 0, 0, 1},
-    {0, 1, 0, 1},
-    {0, 0, 1, 1},
-    {1, 0, 0, 1},
-    {0, 1, 0, 1},
-    {0, 0, 1, 1},
-    {1, 1, 0, 1},
-  };
+  Solid shape = Solid::platonic(4, 3);
+  float base_scale = 1.6f * pow(shape.r_face(), 2.f) / shape.r_vertex();
+  for(const auto [ix, vector] : shape.face_dirs()) {
+    shape_cuts.push_back({{vector, base_scale}, static_cast<Index>(ix)});
+    cuts.push_back({vector, base_scale / 2});
+  }
 
   try {
     GLFWwindow* window = init_glfw();
@@ -97,7 +81,7 @@ int main() {
     GLutil::initGLEW();
     init_programs(ctx);
     Volume shape = init_shape(ctx, 2, shape_cuts);
-    init_model(ctx, shape, cuts, colours);
+    init_model(ctx, shape, cuts, {}/*colours*/);
     init_cubemap(ctx, tex_cubemap, shape, shape_cuts, cuts);
     init_click_target(ctx);
 
@@ -110,7 +94,7 @@ int main() {
       glm::vec2 loc = touch_location(window);
       if(ctx.ui.buttondown)
         rotate_model(ctx, loc, false);
-      draw(ctx, get_click_volume(ctx, loc));
+      draw(ctx, 0/*get_click_volume(ctx, loc)*/);
       glfwSwapBuffers(window);
       glfwPollEvents();
     }
