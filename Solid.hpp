@@ -80,6 +80,26 @@ public:
     return {a, b, va, vb, vc};
   }
 
+  static Solid dihedral(unsigned n, float aspect) {
+    Permutation a, b;
+    glm::vec3 va, vb, vc;
+    std::vector<Permutation::entry_type> v(n);
+
+    std::iota(v.begin(), v.end() - 1, 1);
+    v.back() = 0;
+    a = Permutation{v};
+
+    std::iota(v.begin(), v.end(), 0);
+    std::reverse(v.begin() + 1, v.end());
+    b = Permutation{v};
+
+    float alpha = M_PI/n;
+    va = {0, -sin(alpha) * aspect, 0}; // same conventions as in Solid::platonic()
+    vb = {cos(alpha), 0, -sin(alpha)};
+    vc = {cos(alpha), 0, 0};
+    return {a, b, va, vb, vc};
+  }
+
   using direction_pair = std::pair<Permutation::size_type, glm::vec3>;
 
   std::vector<direction_pair> face_dirs() const {
