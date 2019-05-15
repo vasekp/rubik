@@ -223,13 +223,13 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
   glGenTextures(1, &texture);
   glActiveTexture(GL_TEXTURE0 + texUnit);
   glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   for(auto& [face, proj] : faces)
-    glTexImage2D(face, 0, GL_RGB, texSize, texSize, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(face, 0, GL_R32F, texSize, texSize, 0, GL_RED, GL_FLOAT, nullptr);
 
   GLutil::program prog_texgen{
     GLutil::shader{"texgen.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
@@ -295,7 +295,7 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
   glClearColor(1, 1, 1, 1);
   glUseProgram(prog_texgen);
   glEnable(GL_BLEND);
-  glBlendEquation(GL_MIN);
+  glBlendFunc(GL_DST_COLOR, GL_ZERO);
 
   for(auto& [face, proj] : faces) {
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, face, texture, 0);
@@ -317,14 +317,13 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
     }
   }
 
-  glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
   glUseProgram(ctx.gl.prog_model);
   glUniform1i(ctx.gl.uniforms_model.texture, texUnit);
+  glHint(GL_FRAGMENT_SHADER_DERIVATIVE_HINT, GL_NICEST);
 
   // reset to sensible state
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glBlendEquation(GL_FUNC_ADD);
   glDisable(GL_BLEND);
   glClearColor(0, 0, 0, 1);
 }

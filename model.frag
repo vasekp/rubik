@@ -1,6 +1,6 @@
 #version 300 es
 
-precision mediump float;
+precision highp float;
 
 uniform samplerCube sampler;
 uniform bool highlight;
@@ -18,7 +18,13 @@ const float mix_specular = 0.3;
 const float base_brightness = 0.15;
 
 void main() {
-  vec4 properColour = texture(sampler, texCoord, -1.0).r * faceColour;
+  float mask = abs(
+      texture(sampler, texCoord).r +
+      texture(sampler, texCoord + .5*dFdx(texCoord)).r +
+      texture(sampler, texCoord - .5*dFdx(texCoord)).r +
+      texture(sampler, texCoord + .5*dFdy(texCoord)).r +
+      texture(sampler, texCoord - .5*dFdy(texCoord)).r) / 5.;
+  vec4 properColour = mask * faceColour;
   properColour = mix(properColour, vec4(vec3(base_brightness), 1.0), 1.0 - properColour.a);
   vec4 nnormal = normalize(normal);
   vec4 npos = vec4(normalize(vec3(coords)), 1);
