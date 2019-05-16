@@ -11,6 +11,13 @@
 template<class Group, class Matrix>
 class Representation;
 
+template<typename T>
+struct element_traits {
+  static T identity() {
+    return T{};
+  }
+};
+
 template<class Element>
 class Group {
   std::vector<Element> gens;
@@ -21,7 +28,7 @@ public:
   using element_type = Element;
 
   Group(std::vector<Element> gens_)
-    : gens(std::move(gens_)), elems{Element{}}, cayley{}
+    : gens(std::move(gens_)), elems{element_traits<Element>::identity()}, cayley{}
   {
     for(std::size_t i = 0; i < elems.size(); i++) {
       const auto p = elems[i];
@@ -99,7 +106,7 @@ class Representation {
 
 public:
   Representation(const Group& group_, std::vector<Matrix> mxs)
-    : group(group_), elems{Matrix{}}
+    : group(group_), elems{element_traits<Matrix>::identity()}
   {
     assert(mxs.size() == group.gens.size());
     for(std::size_t i = 0; i < group.cayley.size(); i++) {
@@ -134,6 +141,5 @@ public:
   }
 
 };
-
 
 #endif
