@@ -18,7 +18,7 @@ void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite) {
     glm::vec4 v{ctx.mxs.proj * glm::vec4{0, 0, 1, 1}};
     return glm::vec2{v.z, v.w};
   }();
-  glm::vec2 modelcoord = glm::vec2{inverse(ctx.mxs.proj) * glm::vec4{loc, last_two}};
+  glm::vec2 modelcoord = glm::vec2{inverse(ctx.mxs.proj) * glm::vec4{last_two.y * loc, last_two}};
   glm::mat4 model = glm::rotate(
       glm::rotate(
         glm::mat4{1},
