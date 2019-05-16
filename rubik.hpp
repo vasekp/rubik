@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include "Solid.hpp"
 
 struct Piece {
   Volume volume;
@@ -64,5 +65,12 @@ void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite);
 GLint get_click_volume(Context& ctx, glm::vec2 point);
 
 void draw(Context& ctx, int);
+
+template<>
+struct element_traits<glm::mat4> {
+  static glm::mat4 identity() {
+    return glm::mat4{1};
+  }
+};
 
 #endif

@@ -26,8 +26,8 @@ class Solid {
   Solid(Permutation a, Permutation b, glm::vec3 va, glm::vec3 vb, glm::vec3 vc)
     : group({a, b}),
       rep({group, {
-            glm::rotate(glm::mat4{}, -float(2*M_PI/a.order()), va),
-            glm::rotate(glm::mat4{}, -float(2*M_PI/b.order()), vb)
+            glm::rotate(glm::mat4{1}, -float(2*M_PI/a.order()), va),
+            glm::rotate(glm::mat4{1}, -float(2*M_PI/b.order()), vb)
           }}),
       p_face(a), p_vertex(b), p_edge(b*a),
       v_face(va), v_vertex(vb), v_edge(vc)

@@ -18,10 +18,10 @@ void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite) {
     glm::vec4 v{ctx.mxs.proj * glm::vec4{0, 0, 1, 1}};
     return glm::vec2{v.z, v.w};
   }();
-  glm::vec2 modelcoord = glm::vec2{inverse(ctx.mxs.proj) * glm::vec4{loc, last_two}};
+  glm::vec2 modelcoord = glm::vec2{inverse(ctx.mxs.proj) * glm::vec4{last_two.y * loc, last_two}};
   glm::mat4 model = glm::rotate(
       glm::rotate(
-        glm::mat4{},
+        glm::mat4{1},
         -modelcoord.x, {0, 1, 0}),
       modelcoord.y, {1, 0, 0}) * ctx.mxs.model;
   glUseProgram(ctx.gl.prog_model);
@@ -110,7 +110,7 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
     ctx.pieces.push_back({
         volume,
         volume.center(),
-        glm::mat4{},
+        glm::mat4{1},
         reinterpret_cast<void*>(indexBase * sizeof(Index)),
         static_cast<GLint>(indices.size() - indexBase)});
   }
@@ -167,10 +167,10 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
   glVertexAttribPointer(click_coords, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
 
-  ctx.mxs.view = glm::translate(glm::mat4{}, glm::vec3(0, 0, 3));
+  ctx.mxs.view = glm::translate(glm::mat4{1}, glm::vec3(0, 0, 3));
   ctx.mxs.model = glm::rotate(
       glm::rotate(
-        glm::mat4{},
+        glm::mat4{1},
         -0.3f, glm::vec3{1, 0, 0}),
       -0.f, glm::vec3{0, 1, 0});
   glUseProgram(ctx.gl.prog_model);

@@ -3,8 +3,6 @@
 #include "rubik.hpp"
 #include <GLFW/glfw3.h>
 
-#include "Solid.hpp"
-
 glm::vec2 touch_location(GLFWwindow* window) {
   double x, y;
   glfwGetCursorPos(window, &x, &y);
