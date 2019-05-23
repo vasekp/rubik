@@ -69,7 +69,8 @@ int main() {
   float base_scale = 1.6f * pow(shape.r_edge(), 2.f) / shape.r_vertex();
   for(const auto [perm, vector] : shape.edge_dirs()) {
     shape_cuts.push_back({{vector, base_scale}, ++ix});
-    cuts.push_back({vector, base_scale / 2});
+    cuts.push_back({vector, -base_scale / 2});
+    cuts.push_back({vector, base_scale / 4});
   }
   base_scale = 1.6f * pow(shape.r_face(), 2.f) / shape.r_vertex();
   for(const auto [perm, vector] : shape.face_dirs()) {
