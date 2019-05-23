@@ -95,18 +95,20 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
   std::vector<Index> indices{};
 
   ctx.pieces.resize(0);
-  for(auto& volume : m.get_volumes()) {
-    ExtVolume ext(volume, 0.03);
+  for(auto volume : m.get_volumes()) {
+    volume.erode(0.03);
+    volume.dilate(0.03);
     size_t base = coords.size();
     size_t indexBase = indices.size();
-    const auto& vertices = ext.get_vertices();
+    const auto& vertices = volume.get_vertices();
     std::copy(begin(vertices), end(vertices), std::back_inserter(coords));
-    for(const auto& face : ext.get_faces()) {
+    for(const auto& face : volume.get_faces()) {
+      if(face.tag == Index(-1))
+        break;
       std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
       std::fill_n(std::back_inserter(colours), face.indices.size(), glm::vec4(1) /*colour_vals[face.tag]*/);
     }
-    append_face_list(indices, base, ext.get_faces());
-    append_face_list(indices, base, ext.get_ext_faces());
+    append_face_list(indices, base, volume.get_faces());
     ctx.pieces.push_back({
         volume,
         volume.center(),
