@@ -100,10 +100,10 @@ public:
 
     for(auto& f : faces) {
 #ifdef DEBUG
-      std::cout << "Face [ ";
+      std::clog << "Face [ ";
       for(auto ix : f.indices)
-        std::cout << ix << ' ';
-      std::cout << "]: ";
+        std::clog << ix << ' ';
+      std::clog << "]: ";
 #endif
       {
         unsigned cIn = 0, cOut = 0;
@@ -115,14 +115,14 @@ public:
 
         if(cOut == 0) { // whole face in
 #ifdef DEBUG
-          std::cout << "keep\n";
+          std::clog << "keep\n";
 #endif
           volIn.faces.push_back(std::move(f));
           continue;
         }
         if(cIn == 0) {  // whole face out
 #ifdef DEBUG
-          std::cout << "drop\n";
+          std::clog << "drop\n";
 #endif
           volOut.faces.push_back(std::move(f));
           continue;
@@ -131,7 +131,7 @@ public:
 
       // face actually cut by the plane
 #ifdef DEBUG
-      std::cout << "split\n";
+      std::clog << "split\n";
 #endif
 
       Face fIn{f.normal, f.tag}, fOut{f.normal, f.tag};
@@ -199,18 +199,18 @@ public:
 
 #ifdef DEBUG
   void dump() const {
-    std::cout << "VOLUME:\n";
+    std::clog << "VOLUME:\n";
     for(Index ix = 0; ix < vertices.size(); ix++) {
-      std::cout << ix << ": {"
+      std::clog << ix << ": {"
         << vertices[ix].x << ", "
         << vertices[ix].y << ", "
         << vertices[ix].z << "}\n";
     }
     for(const auto& f : faces) {
-      std::cout << "{ ";
+      std::clog << "{ ";
       for(auto ix : f.indices)
-        std::cout << ix << ' ';
-      std::cout << "} n {"
+        std::clog << ix << ' ';
+      std::clog << "} n {"
         << f.normal.x << ", "
         << f.normal.y << ", "
         << f.normal.z << "}\n";
@@ -258,7 +258,7 @@ private:
     vertices.push_back(vx);
     Index ix = static_cast<Index>(vertices.size() - 1);
 #ifdef DEBUG
-    std::cout << "Adding " << ix << ": {"
+    std::clog << "Adding " << ix << ": {"
       << vertices[ix].x << ", "
       << vertices[ix].y << ", "
       << vertices[ix].z << "}\n";
@@ -278,10 +278,10 @@ private:
           ix = map[ix] = newIx++;
         }
 #ifdef DEBUG
-    std::cout << "Taking";
+    std::clog << "Taking";
     for(auto [key, val] : map)
-      std::cout << ' ' << key;
-    std::cout << '\n';
+      std::clog << ' ' << key;
+    std::clog << '\n';
 #endif
   }
 };
@@ -307,7 +307,7 @@ public:
 
   ExtVolume(const Volume& orig, float dist) {
 #ifdef DEBUG
-    std::cout << "\nEXT VOLUME\n";
+    std::clog << "\nEXT VOLUME\n";
 #endif
     std::map<Index, Face> ext_vertices{};
 
@@ -352,7 +352,7 @@ public:
               // edge found!
               found = true;
 #ifdef DEBUG
-              std::cout << 'f' << fi1 << " i" << vi1 << " j" << vj1 <<
+              std::clog << 'f' << fi1 << " i" << vi1 << " j" << vj1 <<
                 " = f" << fi2 << " i" << vi2 << " j" << vj2 << '\n';
 #endif
               // vi1, vj1 indices within f1 = orig.faces[fi1]
@@ -386,7 +386,7 @@ public:
         auto cross = glm::cross(dprev, normal);
         auto triple = dot(dnext, cross);
 #ifdef DEBUG
-        std::cout << "Vertex " << f.indices[i] << ": "
+        std::clog << "Vertex " << f.indices[i] << ": "
           << "|dprev| = " << length(dprev)
           << ", |dnext| = " << length(dnext)
           << ", |cross| = " << length(cross)
@@ -399,7 +399,7 @@ public:
       // safe to overwrite now
       for(size_t i = 0; i < size; i++) {
 #ifdef DEBUG
-        std::cout << "Vertex " << f.indices[i] << " shrunk by "
+        std::clog << "Vertex " << f.indices[i] << " shrunk by "
           << distance(vertices[f.indices[i]], shrunk[i]) << '\n';
 #endif
         vertices[f.indices[i]] = shrunk[i];
@@ -414,7 +414,7 @@ public:
       f.normal = normalize(f.normal);
 
 #ifdef DEBUG
-    std::cout << "Totals: "
+    std::clog << "Totals: "
       << faces.size() << " faces, "
       << vertices.size() << " vertices, "
       << ext_faces.size() << " ext faces\n";
@@ -435,12 +435,12 @@ public:
 
   void cut(const Plane& p, Index tag = 0) {
 #ifdef DEBUG
-    std::cout << "\nCUTTING\n";
+    std::clog << "\nCUTTING\n";
 #endif
     std::vector<Volume> nvolumes{};
     for(auto& volume : volumes) {
 #ifdef DEBUG
-      std::cout << "[ vol ]\n";
+      std::clog << "[ vol ]\n";
 #endif
       Volume outer = volume.cut(p, tag);
       if(volume.empty())
