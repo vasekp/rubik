@@ -52,8 +52,21 @@ struct Face {
 
   Face() : Face({}, 0) { }
 
-  unsigned index(Index ix) const {
-    return static_cast<unsigned>(std::distance(indices.begin(), std::find(indices.begin(), indices.end(), ix)));
+  int index(Index ix) const {
+    return std::distance(indices.begin(), std::find(indices.begin(), indices.end(), ix));
+  }
+
+  Index operator[](int i) const {
+    assert(i >= -1);
+    return i == -1 ? indices.back() : indices[i % indices.size()];
+  }
+
+  Index next(Index ix) const {
+    return (*this)[index(ix) + 1];
+  }
+
+  Index prev(Index ix) const {
+    return (*this)[index(ix) - 1];
   }
 
 #ifdef DEBUG
@@ -211,57 +224,57 @@ public:
       nfaces.push_back(std::move(nface));
     }
 
+    // Now each faces[i] has its nfaces[i], which has the same size
+    // and nfaces[i][j] is the i-th face's copy of vertex faces[i][j]
+
     // Make new (zero area) faces for edges
     for(const auto& face : faces) {
-      size_t i = &face - &faces[0];
-      size_t sz = face.indices.size();
-      for(size_t j = 0; j < sz; j++)
-        if(face.indices[j] < face.indices[(j + 1) % sz]) { // This condition guarantees that each edge is only counted once
-          Index orig1 = face.indices[j], orig2 = face.indices[(j + 1) % sz];
+      auto i = &face - &faces[0];
+      auto sz = face.indices.size();
+      for(auto j = 0u; j < sz; j++) {
+        Index orig1 = face[j], orig2 = face[j + 1];
+        if(orig1 < orig2) {  // This condition guarantees that each edge is only counted once
           const Face& face2 = find_face(orig2, orig1);
-          size_t i2 = &face2 - &faces[0];
-          size_t sz2 = face2.indices.size();
-          size_t j2 = face2.index(orig2);
+          auto i2 = &face2 - &faces[0];
+          auto j2 = face2.index(orig2);
           nfaces.push_back({{
-              nfaces[i].indices[(j + 1) % sz], nfaces[i].indices[j],
-              nfaces[i2].indices[(j2 + 1) % sz2], nfaces[i2].indices[j2]},
-            glm::normalize(face.normal + face2.normal), Index(-1)});
+              nfaces[i][j + 1], nfaces[i][j],
+              nfaces[i2][j2 + 1], nfaces[i2][j2]},
+            glm::normalize(face.normal + face2.normal), dilate_face_tag});
         }
+      }
     }
 
     // Make new zero area faces for vertices
     std::vector<bool> seen(vertices.size());
     for(const auto& face : faces) {
       Index i = &face - &faces[0];
-      size_t sz = face.indices.size();
-      for(size_t j = 0; j < sz; j++) {
+      auto sz = face.indices.size();
+      for(auto j = 0u; j < sz; j++) {
         Index pivot = face.indices[j];
         if(seen[pivot])
           continue;
-        Index ix = face.indices[(j + 1) % face.indices.size()];
-        Index nix = nfaces[i].indices[j % face.indices.size()];
         glm::vec3 normal{};
-        std::vector<Index> nface{nix};
-        for(;;) {
+        std::vector<Index> nface{nfaces[i][j]};
+        for(Index ix = face[j + 1]; ; ) {
           const Face& f2 = find_face(ix, pivot);
-          size_t i2 = &f2 - &faces[0];
+          auto i2 = &f2 - &faces[0];
           auto j2 = f2.index(pivot);
-          Index ix2 = f2.indices[(j2 + 1) % f2.indices.size()];
-          Index nix2 = nfaces[i2].indices[j2 % f2.indices.size()];
-          if(nix2 == nface.front())
+          Index new_ix = nfaces[i2][j2];
+          if(new_ix == nface.front())
             break;
-          nface.push_back(nix2);
-          ix = ix2;
+          nface.push_back(new_ix);
+          ix = f2[j2 + 1];
         }
         std::reverse(nface.begin(), nface.end());
-        nfaces.emplace_back(std::move(nface), normal, Index(-1));
+        nfaces.emplace_back(std::move(nface), normal, dilate_face_tag);
         seen[pivot] = true;
       }
     }
 
     // Displace vertices
     for(const auto& nface : nfaces) {
-      if(nface.tag == Index(-1)) // Ignore extra faces
+      if(nface.tag == dilate_face_tag) // Ignore extra faces
         continue;
       glm::vec3 displ = dist * nface.normal;
       for(auto ix : nface.indices)
@@ -274,12 +287,13 @@ public:
 
 private:
   constexpr static float epsilon = 0.001;
+  constexpr static Index dilate_face_tag = -1;
 
   void add_intersections(const Plane& p) {
     for(auto& face : faces) {
       Index last_ix = face.indices.back();
       auto last_dot = vertices[last_ix] * p;
-      for(unsigned i = 0; i < face.indices.size(); i++) {
+      for(auto i = 0u; i < face.indices.size(); i++) {
         Index cur_ix = face.indices[i];
         auto cur_dot = vertices[cur_ix] * p;
         if((cur_dot > epsilon && last_dot < -epsilon) || (cur_dot < -epsilon && last_dot > epsilon)) {
@@ -320,22 +334,21 @@ private:
   }
 
   std::vector<Index> traverse_start(const Face& f, const Plane& p) {
-    unsigned i, first_nonneg;
-    for(i = 0; i < f.indices.size(); i++)
+    size_t i, first_nonneg;
+    auto sz = f.indices.size();
+    for(i = 0; i < sz; i++)
       if(vertices[f.indices[i]] * p < -epsilon)
         break;
-    for(; i < f.indices.size(); i++)
+    for(; i < sz; i++)
       if(vertices[f.indices[i]] * p > -epsilon) {
         first_nonneg = i;
         break;
       }
-    if(i == f.indices.size())
+    if(i == sz)
       first_nonneg = 0;
-    unsigned before = (first_nonneg + f.indices.size() - 1) % f.indices.size();
-    unsigned after = (first_nonneg + 1) % f.indices.size();
-    Index ixPivot = f.indices[first_nonneg];
-    Index ixNeg = f.indices[before];
-    Index ixPos = f.indices[after];
+    Index ixPivot = f[first_nonneg];
+    Index ixNeg = f[first_nonneg - 1];
+    Index ixPos = f[first_nonneg + 1];
     assert(vertices[ixNeg] * p < -epsilon && vertices[ixPos] * p > -epsilon);
     return traverse_nbours({ixPivot}, p, ixPivot, ixNeg, ixPos);
   }
@@ -360,20 +373,20 @@ private:
           section.push_back(ix);
           const Face& prev_face = find_face(ix, ixPivot);
           const Face& next_face = find_face(ixPivot, ix);
-          Index new_pos = next_face.indices[(next_face.index(ix) + 1) % next_face.indices.size()];
-          Index new_neg = prev_face.indices[(prev_face.index(ix) + prev_face.indices.size() - 1) % prev_face.indices.size()];
+          Index new_pos = next_face.next(ix);
+          Index new_neg = prev_face.prev(ix);
           return traverse_nbours(section, p, ix, new_neg, new_pos);
         }
       } else if(vertices[ix] * p > epsilon) {
         assert(ix != ixNeg);
         const Face& prev_face = find_face(ix, ixPivot);
-        Index neg = prev_face.indices[(prev_face.index(ixPivot) + 1) % prev_face.indices.size()];
+        Index neg = prev_face.next(ixPivot);
         return traverse_face(section, p, prev_face, neg, ix);
       }
       if(ix == ixPos)
         throw std::runtime_error("traverse_nbours() failed!");
       const Face& next_face = find_face(ixPivot, ix);
-      ix = next_face.indices[(next_face.index(ixPivot) + next_face.indices.size() - 1) % next_face.indices.size()];
+      ix = next_face.prev(ixPivot);
     }
   }
 
@@ -384,8 +397,8 @@ private:
       << ", ixPos = " << ixPos << '\n';
 #endif
     assert(vertices[ixNeg] * p < -epsilon && vertices[ixPos] * p > epsilon);
-    for(unsigned i = face.index(ixNeg); face.indices[i] != ixPos; i = (i + 1) % face.indices.size()) {
-      Index ix = face.indices[i];
+    for(auto i = face.index(ixNeg); face[i] != ixPos; i++) {
+      Index ix = face[i];
 #ifdef DEBUG
       std::clog << " ... " << ix << " (" << vertices[ix] * p << ")\n";
 #endif
@@ -394,9 +407,7 @@ private:
           return section;
         else {
           section.push_back(ix);
-          Index ixNeg = face.indices[(i + face.indices.size() - 1) % face.indices.size()];
-          Index ixPos = face.indices[(i + 1) % face.indices.size()];
-          return traverse_nbours(section, p, ix, ixNeg, ixPos);
+          return traverse_nbours(section, p, ix, face[i - 1], face[i + 1]);
         }
       }
     }
@@ -406,8 +417,8 @@ private:
   Face& find_face(Index i1, Index i2) {
     for(auto& face : faces) {
       auto sz = face.indices.size();
-      for(unsigned i = 0; i < sz; i++)
-        if(face.indices[i] == i1 && face.indices[(i + 1) % sz] == i2)
+      for(auto i = 0u; i < sz; i++)
+        if(face[i] == i1 && face[i + 1] == i2)
           return face;
     }
     throw std::runtime_error("face not found");

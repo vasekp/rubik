@@ -103,8 +103,8 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
     const auto& vertices = volume.get_vertices();
     std::copy(begin(vertices), end(vertices), std::back_inserter(coords));
     for(const auto& face : volume.get_faces()) {
-      if(face.tag == Index(-1))
-        break;
+      if(face.tag == Volume::dilate_face_tag)
+        continue;
       std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
       std::fill_n(std::back_inserter(colours), face.indices.size(), glm::vec4(1) /*colour_vals[face.tag]*/);
     }
