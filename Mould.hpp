@@ -28,6 +28,10 @@ struct Plane {
   friend float operator*(const Vertex& v, const Plane& p) {
     return dot(p.normal, v) - p.offset;
   }
+
+  friend float operator*(const Plane& p, const Vertex& v) {
+    return dot(p.normal, v) - p.offset;
+  }
 };
 
 struct Cut {
@@ -47,6 +51,20 @@ struct Face {
     : Face({}, normal_, tag_) { }
 
   Face() : Face({}, 0) { }
+
+  unsigned index(Index ix) const {
+    return static_cast<unsigned>(std::distance(indices.begin(), std::find(indices.begin(), indices.end(), ix)));
+  }
+
+#ifdef DEBUG
+  friend std::ostream& operator<<(std::ostream& os, const Face& f) {
+    os << "[ ";
+    for(auto ix : f.indices)
+      os << ix << ' ';
+    os << ']';
+    return os;
+  }
+#endif
 };
 
 class Volume {
@@ -75,103 +93,55 @@ public:
   const std::vector<Face>& get_faces() const { return faces; }
 
   Volume cut(const Plane& p, Index tag = 0) {
-    { // Simple cases
-      unsigned cIn = 0, cOut = 0;
-      for(const auto& vx : vertices)
-        if(vx * p < 0)
-          cIn++;
-        else if(vx * p > 0)
-          cOut++;
+#ifdef DEBUG
+    std::clog << "\nVolume::cut\n";
+#endif
 
-      if(cOut == 0) // keep all, return nothing
-        return {};
-      if(cIn == 0) { // discard all, return original      
-        Volume ret{};
-        std::swap(*this, ret);
-        return ret;
-      }
+    // Simple cases
+    if(std::all_of(vertices.begin(), vertices.end(), [&p](const Vertex& vx) -> bool { return vx * p < epsilon; })) {
+#ifdef DEBUG
+      std::clog << "[keep all]\n";
+#endif
+      return {};
+    } else if(std::all_of(vertices.begin(), vertices.end(), [&p](const Vertex& vx) -> bool { return vx * p > -epsilon; })) {
+#ifdef DEBUG
+      std::clog << "[drop all]\n";
+#endif
+      Volume ret{};
+      std::swap(*this, ret);
+      return ret;
     }
 
-    // volume actually cut by the plane
+    add_intersections(p);
 
     Volume volIn{}, volOut{};
-    std::vector<Face> facesIn{}, facesOut{};
-    Face nIn{p.normal, tag}, nOut{-p.normal, tag};
-
-    for(auto& f : faces) {
+    std::vector<Index> section = find_section(p);
+    assert(!section.empty());
 #ifdef DEBUG
-      std::clog << "Face [ ";
-      for(auto ix : f.indices)
-        std::clog << ix << ' ';
-      std::clog << "]: ";
+    std::clog << "Section: [ ";
+    for(auto ix : section)
+      std::clog << ix << ' ';
+    std::clog << "]\n";
 #endif
-      {
-        unsigned cIn = 0, cOut = 0;
-        for(auto ix : f.indices)
-          if(Vertex vx = vertices[ix]; vx * p < 0)
-            cIn++;
-          else if(vx * p > 0)
-            cOut++;
+    std::vector<Index> secReverse = section;
+    std::reverse(secReverse.begin(), secReverse.end());
+    volIn.faces.emplace_back(std::move(section), p.normal, tag);
+    volOut.faces.emplace_back(std::move(secReverse), -p.normal, tag);
 
-        if(cOut == 0) { // whole face in
-#ifdef DEBUG
-          std::clog << "keep\n";
-#endif
-          volIn.faces.push_back(std::move(f));
-          continue;
-        }
-        if(cIn == 0) {  // whole face out
-#ifdef DEBUG
-          std::clog << "drop\n";
-#endif
-          volOut.faces.push_back(std::move(f));
-          continue;
-        }
-      }
-
-      // face actually cut by the plane
-#ifdef DEBUG
-      std::clog << "split\n";
-#endif
-
-      Face fIn{f.normal, f.tag}, fOut{f.normal, f.tag};
-      Vertex last = vertices[f.indices.back()];
-      float ldot = last * p;
-      if(std::abs(ldot) < epsilon)
-        ldot = 0;
-      for(auto ix : f.indices) {
-        Vertex cur = vertices[ix];
-        float dot = cur * p;
-        if(std::abs(dot) < epsilon)
-          dot = 0;
-        if(ldot * dot < 0) {  // the edge intersects the plane
-          auto intersect = (dot * last - ldot * cur)/(dot - ldot);
-          auto newIx = find_or_append(intersect);
-          fIn.indices.push_back(newIx);
-          nIn.indices.push_back(newIx);
-          fOut.indices.push_back(newIx);
-          nOut.indices.push_back(newIx);
-        }
-        if(dot < 0)
+    for(const auto& face : faces) {
+      Face fIn{face.normal, face.tag}, fOut{face.normal, face.tag};
+      for(auto ix : face.indices) {
+        auto dot = vertices[ix] * p;
+        if(dot < epsilon)
           fIn.indices.push_back(ix);
-        else if(dot > 0)
+        if(dot > -epsilon)
           fOut.indices.push_back(ix);
-        else { // the current vertex lies exactly on the plane: add to both
-          fIn.indices.push_back(ix);
-          nIn.indices.push_back(ix);
-          fOut.indices.push_back(ix);
-          nOut.indices.push_back(ix);
-        }
-        last = cur;
-        ldot = dot;
       }
-      volIn.faces.push_back(std::move(fIn));
-      volOut.faces.push_back(std::move(fOut));
+      if(fIn.indices.size() > 2)
+        volIn.faces.push_back(std::move(fIn));
+      if(fOut.indices.size() > 2)
+        volOut.faces.push_back(std::move(fOut));
     }
-
-    // add the new faces
-    volIn.faces.push_back(sort_face(nIn));
-    volOut.faces.push_back(sort_face(nOut));
 
     // take vertices from the original volume
     volIn.take_vertices_finalize(*this);
@@ -218,69 +188,165 @@ public:
   }
 #endif
 
-protected:
-  Face sort_face(const Face& in) {
-    Face out{in.normal, in.tag};
-    for(auto ix : in.indices) {
-      if(out.indices.size() == 0) {
-        out.indices.push_back(ix);
-        continue;
-      } else if(out.indices.size() == 1) {
-        if(distance(vertices[out.indices[0]], vertices[ix]) > epsilon)
-          out.indices.push_back(ix);
-        continue;
-      }
-
-      auto vnew = vertices[ix];
-      Index last = out.indices.back();
-      auto vlast = vertices[last];
-      for(auto cur : out.indices) {
-        auto vcur = vertices[cur];
-        if(dot(cross(vcur - vlast, vnew - vlast), in.normal) > 0) {
-          out.indices.insert(std::find(begin(out.indices), end(out.indices), cur), ix);
-          break;
-        }
-        last = cur;
-        vlast = vcur;
-      }
-    }
-    return out;
-  }
-
 private:
   constexpr static float epsilon = 0.01;
 
-  Index find_or_append(const Vertex& vx) {
-    for(const auto& vy : vertices)
-      if(distance(vx, vy) < epsilon)
-        return static_cast<Index>(&vy - &vertices[0]);
-    // else
-    vertices.push_back(vx);
-    Index ix = static_cast<Index>(vertices.size() - 1);
+  void add_intersections(const Plane& p) {
+    for(auto& face : faces) {
+      Index last_ix = face.indices.back();
+      auto last_dot = vertices[last_ix] * p;
+      for(unsigned i = 0; i < face.indices.size(); i++) {
+        Index cur_ix = face.indices[i];
+        auto cur_dot = vertices[cur_ix] * p;
+        if((cur_dot > epsilon && last_dot < -epsilon) || (cur_dot < -epsilon && last_dot > epsilon)) {
+          Vertex new_vx = (cur_dot * vertices[last_ix] - last_dot * vertices[cur_ix]) / (cur_dot - last_dot);
+          Index new_ix = static_cast<Index>(vertices.size());
+          vertices.push_back(new_vx);
+          Face& f2 = find_face(cur_ix, last_ix);
 #ifdef DEBUG
-    std::clog << "Adding " << ix << ": {"
-      << vertices[ix].x << ", "
-      << vertices[ix].y << ", "
-      << vertices[ix].z << "}\n";
+          std::clog << "New vertex between " << last_ix << " and " << cur_ix << ": "
+            << new_vx.x << ", " << new_vx.y << ", " << new_vx.z << " [" << new_ix << "]\n";
+          std::clog << "Adding to " << face << " and " << f2 << '\n';
 #endif
-    return ix;
+          face.indices.insert(face.indices.begin() + i, new_ix);
+          f2.indices.insert(std::find(f2.indices.begin(), f2.indices.end(), last_ix), new_ix);
+#ifdef DEBUG
+          std::clog << "-> " << face << " and " << f2 << '\n';
+#endif
+        }
+        std::tie(last_ix, last_dot) = std::tie(cur_ix, cur_dot);
+      }
+    }
+  }
+
+  std::vector<Index> find_section(const Plane& p) {
+    for(const auto& face : faces) {
+      bool hasPos = false, hasNeg = false;
+      for(auto ix : face.indices) {
+        auto dot = vertices[ix] * p;
+        if(dot > epsilon)
+          hasPos = true;
+        if(dot < -epsilon)
+          hasNeg = true;
+      }
+      if(hasPos && hasNeg)
+        return traverse_start(face, p);
+    }
+    throw std::runtime_error("find_section() failed");
+  }
+
+  std::vector<Index> traverse_start(const Face& f, const Plane& p) {
+    unsigned i, first_nonneg;
+    for(i = 0; i < f.indices.size(); i++)
+      if(vertices[f.indices[i]] * p < -epsilon)
+        break;
+    for(; i < f.indices.size(); i++)
+      if(vertices[f.indices[i]] * p > -epsilon) {
+        first_nonneg = i;
+        break;
+      }
+    if(i == f.indices.size())
+      first_nonneg = 0;
+    unsigned before = (first_nonneg + f.indices.size() - 1) % f.indices.size();
+    unsigned after = (first_nonneg + 1) % f.indices.size();
+    Index ixPivot = f.indices[first_nonneg];
+    Index ixNeg = f.indices[before];
+    Index ixPos = f.indices[after];
+    assert(vertices[ixNeg] * p < -epsilon && vertices[ixPos] * p > -epsilon);
+    return traverse_nbours({ixPivot}, p, ixPivot, ixNeg, ixPos);
+  }
+
+  std::vector<Index> traverse_nbours(std::vector<Index> section, const Plane& p, Index ixPivot, Index ixNeg, Index ixPos) {
+#ifdef DEBUG
+    std::clog << "Traverse neighbours: "
+      << "ixPivot = " << ixPivot
+      << ", ixNeg = " << ixNeg
+      << ", ixPos = " << ixPos << '\n';
+#endif
+    assert(abs(vertices[ixPivot] * p) < epsilon && vertices[ixNeg] * p < epsilon && vertices[ixPos] * p > -epsilon);
+    Index ix = ixNeg;
+    for(;;) {
+#ifdef DEBUG
+      std::clog << " ... " << ix << " (" << vertices[ix] * p << ")\n";
+#endif
+      if(abs(vertices[ix] * p) < epsilon) {
+        if(section.front() == ix) // loop closed, done
+          return section;
+        else {
+          section.push_back(ix);
+          const Face& prev_face = find_face(ix, ixPivot);
+          const Face& next_face = find_face(ixPivot, ix);
+          Index new_pos = next_face.indices[(next_face.index(ix) + 1) % next_face.indices.size()];
+          Index new_neg = prev_face.indices[(prev_face.index(ix) + prev_face.indices.size() - 1) % prev_face.indices.size()];
+          return traverse_nbours(section, p, ix, new_neg, new_pos);
+        }
+      } else if(vertices[ix] * p > epsilon) {
+        assert(ix != ixNeg);
+        const Face& prev_face = find_face(ix, ixPivot);
+        Index neg = prev_face.indices[(prev_face.index(ixPivot) + 1) % prev_face.indices.size()];
+        return traverse_face(section, p, prev_face, neg, ix);
+      }
+      if(ix == ixPos)
+        throw std::runtime_error("traverse_nbours() failed!");
+      const Face& next_face = find_face(ixPivot, ix);
+      ix = next_face.indices[(next_face.index(ixPivot) + next_face.indices.size() - 1) % next_face.indices.size()];
+    }
+  }
+
+  std::vector<Index> traverse_face(std::vector<Index> section, const Plane& p, const Face& face, Index ixNeg, Index ixPos) {
+#ifdef DEBUG
+    std::clog << "Traverse face: face = " << face
+      << ", ixNeg = " << ixNeg
+      << ", ixPos = " << ixPos << '\n';
+#endif
+    assert(vertices[ixNeg] * p < -epsilon && vertices[ixPos] * p > epsilon);
+    for(unsigned i = face.index(ixNeg); face.indices[i] != ixPos; i = (i + 1) % face.indices.size()) {
+      Index ix = face.indices[i];
+#ifdef DEBUG
+      std::clog << " ... " << ix << " (" << vertices[ix] * p << ")\n";
+#endif
+      if(abs(vertices[ix] * p) < epsilon) {
+        if(section.front() == ix) // loop closed
+          return section;
+        else {
+          section.push_back(ix);
+          Index ixNeg = face.indices[(i + face.indices.size() - 1) % face.indices.size()];
+          Index ixPos = face.indices[(i + 1) % face.indices.size()];
+          return traverse_nbours(section, p, ix, ixNeg, ixPos);
+        }
+      }
+    }
+    throw std::runtime_error("traverse_face() failed!");
+  }
+
+  Face& find_face(Index i1, Index i2) {
+    for(auto& face : faces) {
+      auto sz = face.indices.size();
+      for(unsigned i = 0; i < sz; i++)
+        if(face.indices[i] == i1 && face.indices[(i + 1) % sz] == i2)
+          return face;
+    }
+    throw std::runtime_error("face not found");
   }
 
   void take_vertices_finalize(const Volume& orig) {
     Index newIx = 0;
     std::map<Index, Index> map{};
+#ifdef DEBUG
+    std::clog << "Remap: ";
+#endif
     for(auto& f : faces)
       for(auto& ix : f.indices)
         if(auto it = map.find(ix); it != map.end())
           ix = it->second;
         else {
           vertices.push_back(orig.vertices[ix]);
+#ifdef DEBUG
+          std::clog << ix << "→" << newIx << ' ';
+#endif
           ix = map[ix] = newIx++;
         }
 #ifdef DEBUG
-    std::clog << "Taking";
-    for(auto [key, val] : map)
-      std::clog << ' ' << key;
     std::clog << '\n';
 #endif
   }
@@ -301,11 +367,12 @@ public:
         vertices.push_back(orig_vertices[ix]); // new element @ newIx
         newIxs.push_back(newIx++);
       }
-      faces.push_back({std::move(newIxs), f.normal, f.tag});
+      faces.emplace_back(std::move(newIxs), f.normal, f.tag);
     }
   }
 
-  ExtVolume(const Volume& orig, float dist) {
+  ExtVolume(const Volume& orig, float dist) : ExtVolume(orig) {
+#if 0
 #ifdef DEBUG
     std::clog << "\nEXT VOLUME\n";
 #endif
@@ -327,7 +394,7 @@ public:
         ext_vertices[ix].normal += f.normal;
         newIxs.push_back(newIx++);
       }
-      faces.push_back({std::move(newIxs), f.normal, f.tag});
+      faces.emplace_back(std::move(newIxs), f.normal, f.tag);
     }
 
     // find coincident edges, make edge faces
@@ -364,7 +431,7 @@ public:
                 faces[fi2].indices[vj2],
                 faces[fi2].indices[vi2]
               };
-              ext_faces.push_back({std::move(edge_ixs), f1.normal + f2.normal});
+              ext_faces.emplace_back(std::move(edge_ixs), f1.normal + f2.normal);
               break;
             } // found
           } // vi2
@@ -419,6 +486,7 @@ public:
       << vertices.size() << " vertices, "
       << ext_faces.size() << " ext faces\n";
 #endif
+#endif
   }
 
   const std::vector<Face>& get_ext_faces() const { return ext_faces; }
@@ -435,13 +503,10 @@ public:
 
   void cut(const Plane& p, Index tag = 0) {
 #ifdef DEBUG
-    std::clog << "\nCUTTING\n";
+    std::clog << "\nMould::cut\n";
 #endif
     std::vector<Volume> nvolumes{};
     for(auto& volume : volumes) {
-#ifdef DEBUG
-      std::clog << "[ vol ]\n";
-#endif
       Volume outer = volume.cut(p, tag);
       if(volume.empty())
         std::swap(volume, outer);
@@ -450,6 +515,9 @@ public:
     }
     std::copy(std::make_move_iterator(begin(nvolumes)), std::make_move_iterator(end(nvolumes)),
         std::back_inserter(volumes));
+#ifdef DEBUG
+    std::clog << '\n' << volumes.size() << '\n';
+#endif
   }
 
   const std::vector<Volume>& get_volumes() const {
