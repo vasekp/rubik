@@ -263,9 +263,12 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
   std::vector<Index> indices{};
   std::vector<glm::uint> tags{};
   std::vector<glm::vec3> normals{};
-  ExtVolume ext{main_volume};
+  Volume ext = main_volume;
+  ext.dilate(0);
   append_face_list(indices, 0, ext.get_faces());
   for(const auto& face : ext.get_faces()) {
+    if(face.tag == Volume::dilate_face_tag)
+      continue;
     std::fill_n(std::back_inserter(tags), face.indices.size(), static_cast<glm::uint>(face.tag));
     std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
   }

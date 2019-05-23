@@ -116,28 +116,6 @@ private:
   void take_vertices_finalize(const Volume& orig);
 };
 
-class ExtVolume : public Volume {
-  std::vector<Face> ext_faces;
-
-public:
-  ExtVolume(const Volume& orig) {
-    const auto& orig_vertices = orig.get_vertices();
-    const auto& orig_faces = orig.get_faces();
-    for(const auto& f : orig_faces) {
-      size_t base = vertices.size();
-      size_t newIx = base;
-      std::vector<Index> newIxs{};
-      for(auto ix : f.indices) {
-        vertices.push_back(orig_vertices[ix]); // new element @ newIx
-        newIxs.push_back(newIx++);
-      }
-      faces.emplace_back(std::move(newIxs), f.normal, f.tag);
-    }
-  }
-
-  const std::vector<Face>& get_ext_faces() const { return ext_faces; }
-};
-
 class Mould {
   std::vector<Volume> volumes;
 
