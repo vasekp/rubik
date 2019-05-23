@@ -239,31 +239,36 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
 
   struct {
     GLint proj;
-    GLint normal;
-    GLint offset;
-    GLint tag;
+    GLint p_normal;
+    GLint p_offset;
+    GLint p_tag;
   } uniforms = {
     glGetUniformLocation(prog_texgen, "proj"),
-    glGetUniformLocation(prog_texgen, "normal"),
-    glGetUniformLocation(prog_texgen, "off"),
-    glGetUniformLocation(prog_texgen, "u_tag")
+    glGetUniformLocation(prog_texgen, "p_normal"),
+    glGetUniformLocation(prog_texgen, "p_offset"),
+    glGetUniformLocation(prog_texgen, "p_tag")
   };
   struct {
     GLint coords;
     GLint tag;
+    GLint normal;
   } attribs = {
     glGetAttribLocation(prog_texgen, "in_coords"),
-    glGetAttribLocation(prog_texgen, "in_tag")
+    glGetAttribLocation(prog_texgen, "in_tag"),
+    glGetAttribLocation(prog_texgen, "in_normal")
   };
 
   // main volume faces
 
   std::vector<Index> indices{};
   std::vector<glm::uint> tags{};
+  std::vector<glm::vec3> normals{};
   ExtVolume ext{main_volume};
   append_face_list(indices, 0, ext.get_faces());
-  for(const auto& face : ext.get_faces())
+  for(const auto& face : ext.get_faces()) {
     std::fill_n(std::back_inserter(tags), face.indices.size(), static_cast<glm::uint>(face.tag));
+    std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
+  }
 
   GLuint vao_texgen;
   glGenVertexArrays(1, &vao_texgen);
@@ -272,6 +277,7 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
   enum {
     COORDS_VBO,
     TAGS_VBO,
+    NORMALS_VBO,
     INDICES_IBO,
     BUFFER_COUNT
   };
@@ -287,6 +293,11 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
   glBufferData(GL_ARRAY_BUFFER, tags.size() * sizeof(tags[0]), &tags[0], GL_STATIC_DRAW);
   glEnableVertexAttribArray(attribs.tag);
   glVertexAttribIPointer(attribs.tag, 1, GL_UNSIGNED_INT, sizeof(tags[0]), nullptr);
+
+  glBindBuffer(GL_ARRAY_BUFFER, buffers[NORMALS_VBO]);
+  glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals[0], GL_STATIC_DRAW);
+  glEnableVertexAttribArray(attribs.normal);
+  glVertexAttribPointer(attribs.normal, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(Index), &indices[0], GL_STATIC_DRAW);
@@ -305,16 +316,16 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
     glUniformMatrix4fv(uniforms.proj, 1, GL_FALSE, glm::value_ptr(proj));
 
     for(const auto& plane : cuts) {
-      glUniform3fv(uniforms.normal, 1, glm::value_ptr(plane.normal));
-      glUniform1f(uniforms.offset, plane.offset);
-      glUniform1ui(uniforms.tag, 0);
+      glUniform3fv(uniforms.p_normal, 1, glm::value_ptr(plane.normal));
+      glUniform1f(uniforms.p_offset, plane.offset);
+      glUniform1ui(uniforms.p_tag, 0);
       glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
     }
 
     for(const auto& cut : shape_cuts) {
-      glUniform3fv(uniforms.normal, 1, glm::value_ptr(cut.plane.normal));
-      glUniform1f(uniforms.offset, cut.plane.offset);
-      glUniform1ui(uniforms.tag, cut.tag);
+      glUniform3fv(uniforms.p_normal, 1, glm::value_ptr(cut.plane.normal));
+      glUniform1f(uniforms.p_offset, cut.plane.offset);
+      glUniform1ui(uniforms.p_tag, cut.tag);
       glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
     }
   }

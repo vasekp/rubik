@@ -1,18 +1,26 @@
 #version 300 es
 
-precision mediump float;
+precision highp float;
 
 uniform mat4 proj;
 
 in vec3 in_coords;
 in uint in_tag;
+in vec3 in_normal;
 
 out vec3 coords;
-flat out uint tag;
+flat out uint f_tag;
+flat out vec3 f_normal;
+
+uniform vec3 p_normal;
+flat out float sine, cosine;
 
 void main() {
   vec4 c1 = vec4(in_coords, 1);
   gl_Position = vec4(1, -1, 1, 1) * (proj * c1);
   coords = vec3(c1);
-  tag = in_tag;
+  f_tag = in_tag;
+  f_normal = in_normal;
+  cosine = dot(f_normal, p_normal);
+  sine = sqrt(1. - pow(cosine, 2.));
 }

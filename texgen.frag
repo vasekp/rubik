@@ -2,17 +2,25 @@
 
 precision highp float;
 
-uniform vec3 normal;
-uniform float off;
-uniform uint u_tag;
+// Cutting plane properties
+uniform vec3 p_normal;
+uniform float p_offset;
+uniform uint p_tag;
+
+// Face properties
+flat in uint f_tag;
 
 in vec3 coords;
-flat in uint tag;
 out float color;
+flat in float sine, cosine;
+
+const float bevel_radius = 0.03;
+const float extra_border = 0.02;
 
 void main() {
-  if(tag == u_tag)
+  if(f_tag == p_tag)
     discard;
-  float q = 20.*(dot(normal, coords) - off);
-  color = sign(q) * pow(abs(clamp(q, -1., 1.)), 10.);
+  float q1 = dot(p_normal, coords) - p_offset;
+  float q2 = max(abs(q1 - bevel_radius * cosine) - bevel_radius, 0.) / sine;
+  color = sign(q1) * pow(min(q2 / extra_border, 1.), 10.);
 }
