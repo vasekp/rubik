@@ -102,29 +102,17 @@ public:
 
   using direction_pair = std::pair<Permutation::size_type, glm::vec3>;
 
-  std::vector<direction_pair> face_dirs() const {
-    return dirs(p_face, v_face);
-  }
+  std::vector<direction_pair> faces() const { return dirs(p_face, v_face); }
+  std::vector<direction_pair> vertices() const { return dirs(p_vertex, v_vertex); }
+  std::vector<direction_pair> edges() const { return dirs(p_edge, v_edge); }
 
-  std::vector<direction_pair> vertex_dirs() const {
-    return dirs(p_vertex, v_vertex);
-  }
+  std::vector<direction_pair> face_dirs() const { return dirs(p_face, glm::normalize(v_face)); }
+  std::vector<direction_pair> vertex_dirs() const { return dirs(p_vertex, glm::normalize(v_vertex)); }
+  std::vector<direction_pair> edge_dirs() const { return dirs(p_edge, glm::normalize(v_edge)); }
 
-  std::vector<direction_pair> edge_dirs() const {
-    return dirs(p_edge, v_edge);
-  }
-
-  float r_face() const {
-    return glm::length(v_face);
-  }
-
-  float r_vertex() const {
-    return glm::length(v_vertex);
-  }
-
-  float r_edge() const {
-    return glm::length(v_edge);
-  }
+  float r_face() const { return glm::length(v_face); }
+  float r_vertex() const { return glm::length(v_vertex); }
+  float r_edge() const { return glm::length(v_edge); }
 
 private:
   std::vector<direction_pair>

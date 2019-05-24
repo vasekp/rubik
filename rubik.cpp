@@ -106,7 +106,7 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
       if(face.tag == Volume::dilate_face_tag)
         continue;
       std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
-      std::fill_n(std::back_inserter(colours), face.indices.size(), glm::vec4(1) /*colour_vals[face.tag]*/);
+      std::fill_n(std::back_inserter(colours), face.indices.size(), glm::vec4(face.tag > 0 ? 1 : 0) /*colour_vals[face.tag]*/);
     }
     append_face_list(indices, base, volume.get_faces());
     ctx.pieces.push_back({
@@ -172,9 +172,11 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
   ctx.mxs.view = glm::translate(glm::mat4{1}, glm::vec3(0, 0, 3));
   ctx.mxs.model = glm::rotate(
       glm::rotate(
-        glm::mat4{1},
+        glm::scale(
+          glm::mat4{1},
+          glm::vec3{1.5f}),
         -0.3f, glm::vec3{1, 0, 0}),
-      -0.f, glm::vec3{0, 1, 0});
+      0.2f, glm::vec3{0, 1, 0});
   glUseProgram(ctx.gl.prog_model);
   glUniformMatrix4fv(ctx.gl.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.mxs.view * ctx.mxs.model));
 }

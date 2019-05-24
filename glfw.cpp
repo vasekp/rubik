@@ -64,17 +64,25 @@ int main() {
   std::vector<Cut> shape_cuts{};
   std::vector<Plane> cuts{};
 
+  /*Solid shape = Solid::platonic(4, 3);
+  Index ix = 0;
+  float r_face = shape.r_face();
+  for(const auto [perm, vector] : shape.face_dirs()) {
+    shape_cuts.push_back({{vector, r_face}, ++ix});
+    cuts.push_back({vector, r_face / 3});
+  }*/
+
   Solid shape = Solid::dihedral(3, 0.5);
   Index ix = 0;
-  float base_scale = 1.6f * pow(shape.r_edge(), 2.f) / shape.r_vertex();
+  float r_edge = shape.r_edge();
   for(const auto [perm, vector] : shape.edge_dirs()) {
-    shape_cuts.push_back({{vector, base_scale}, ++ix});
-    cuts.push_back({vector, -base_scale / 2});
-    cuts.push_back({vector, base_scale / 4});
+    shape_cuts.push_back({{vector, r_edge}, ++ix});
+    cuts.push_back({vector, -r_edge / 2});
+    cuts.push_back({vector, r_edge / 4});
   }
-  base_scale = 1.6f * pow(shape.r_face(), 2.f) / shape.r_vertex();
+  float r_face = shape.r_face();
   for(const auto [perm, vector] : shape.face_dirs()) {
-    shape_cuts.push_back({{vector, base_scale}, ++ix});
+    shape_cuts.push_back({{vector, r_face}, ++ix});
     cuts.push_back({vector, 0});
   }
 
