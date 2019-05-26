@@ -172,7 +172,7 @@ public:
     std::vector<entry_type> ncycles = cycles;
     for(auto it = ncycles.begin(); it != ncycles.end(); it++) {
       auto it2 = std::find(it + 1, ncycles.end(), *it);
-      std::reverse(it, it2);
+      std::reverse(it + 1, it2);
       it = it2;
     }
     return {std::move(ncycles), {}};
