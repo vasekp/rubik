@@ -104,7 +104,7 @@ public:
     return {a, b, va, vb, vc};
   }
 
-  using direction_pair = std::pair<Permutation::size_type, glm::vec3>;
+  using direction_pair = std::pair<Permutation, glm::vec3>;
 
   std::vector<direction_pair> faces() const { return dirs(p_face, v_face); }
   std::vector<direction_pair> vertices() const { return dirs(p_vertex, v_vertex); }
@@ -118,6 +118,10 @@ public:
   float r_vertex() const { return glm::length(v_vertex); }
   float r_edge() const { return glm::length(v_edge); }
 
+  glm::vec3 face(const Permutation& p)  const { return glm::mat3{rep.represent(p)} * v_face; }
+  glm::vec3 vertex(const Permutation& p)  const { return glm::mat3{rep.represent(p)} * v_vertex; }
+  glm::vec3 edge(const Permutation& p)  const { return glm::mat3{rep.represent(p)} * v_edge; }
+
 private:
   std::vector<direction_pair>
     dirs(const Permutation& generator, const glm::vec3& ref_vector) const
@@ -126,7 +130,7 @@ private:
     std::vector<direction_pair> ret{};
     for(const auto& coset : group.cosets_r(subgroup)) {
       glm::mat3 matrix = {rep.represent(coset.front())};
-      ret.push_back({Permutation::to_numbered(coset.front()), matrix * ref_vector});
+      ret.push_back({coset.front(), matrix * ref_vector});
     }
     return ret;
   }

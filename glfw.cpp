@@ -72,7 +72,7 @@ int main() {
     cuts.push_back({vector, r_face / 3});
   }*/
 
-  Solid shape = Solid::dihedral(3, 0.5);
+  /*Solid shape = Solid::dihedral(3, 0.5);
   Index ix = 0;
   float r_edge = shape.r_edge();
   for(const auto& [perm, vector] : shape.edge_dirs()) {
@@ -84,7 +84,21 @@ int main() {
   for(const auto& [perm, vector] : shape.face_dirs()) {
     shape_cuts.push_back({{vector, r_face}, ++ix});
     cuts.push_back({vector, 0});
-  }
+  }*/
+
+  Solid shape = Solid::platonic(5, 3);
+  Index ix = 0;
+  float r_face = shape.r_face();
+  for(const auto& [perm, vector] : shape.face_dirs())
+    shape_cuts.push_back({{vector, r_face}, ++ix});
+  Permutation tr = Permutation::from_cycles({{1, 2, 4}});
+  Solid shape2 = Solid::platonic(3, 3);
+  float dist = glm::dot(
+      shape.edge({4, 1, 3, 2, 0}),
+      shape.vertex({2, 3, 4, 0, 1}));
+  dist = 0.307;
+  for(const auto& [perm, ignore] : shape2.edge_dirs())
+    cuts.push_back({shape.edge(tr * perm * tr.inverse()), dist});
 
   try {
     GLFWwindow* window = init_glfw();
