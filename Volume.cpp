@@ -221,37 +221,38 @@ void Volume::add_intersections(const Plane& p) {
 
 std::vector<Index> Volume::find_section(const Plane& p) {
   for(const auto& face : faces) {
-    bool hasPos = false, hasNeg = false;
+    unsigned cCross = 0;
     for(auto ix : face.indices) {
       auto dot = vertices[ix] * p;
-      if(dot > epsilon)
-        hasPos = true;
-      if(dot < -epsilon)
-        hasNeg = true;
+      if(abs(dot) < epsilon)
+        cCross++;
     }
-    if(hasPos && hasNeg)
+    if(cCross >= 2)
       return traverse_start(face, p);
   }
   throw std::runtime_error("find_section() failed");
 }
 
 std::vector<Index> Volume::traverse_start(const Face& f, const Plane& p) {
-  size_t i, first_nonneg;
+  size_t i;
   auto sz = f.indices.size();
   for(i = 0; i < sz; i++)
-    if(vertices[f.indices[i]] * p < -epsilon)
+    if(abs(vertices[f.indices[i]] * p) < epsilon)
       break;
-  for(; i < sz; i++)
-    if(vertices[f.indices[i]] * p > -epsilon) {
-      first_nonneg = i;
-      break;
-    }
-  if(i == sz)
-    first_nonneg = 0;
-  Index ixPivot = f[first_nonneg];
-  Index ixNeg = f[first_nonneg - 1];
-  Index ixPos = f[first_nonneg + 1];
-  assert(vertices[ixNeg] * p < -epsilon && vertices[ixPos] * p > -epsilon);
+  assert(i < sz);
+  Index ixPivot = f[i];
+  Index ixNeg = f[i + 1];
+  Index ixPos = f[i - 1];
+  if(vertices[ixNeg] * p > epsilon || vertices[ixPos] * p < -epsilon) {
+    for(i++; i < sz; i++)
+      if(abs(vertices[f.indices[i]] * p) < epsilon)
+        break;
+    assert(i < sz);
+    ixPivot = f[i];
+    ixNeg = f[i + 1];
+    ixPos = f[i - 1];
+  }
+  assert(vertices[ixNeg] * p < epsilon && vertices[ixPos] * p > -epsilon);
   return traverse_nbours({ixPivot}, p, ixPivot, ixNeg, ixPos);
 }
 
