@@ -1,6 +1,7 @@
 #ifndef PERMUTATION_HPP
 #define PERMUTATION_HPP
 
+#include <initializer_list>
 #include <vector>
 #include <numeric>
 #include <iterator>
@@ -19,7 +20,11 @@ public:
 public:
   Permutation() : cycles{} { }
 
-  Permutation(const std::vector<entry_type>& list) : cycles{} {
+  Permutation(const std::initializer_list<entry_type>& list_)
+    : Permutation(std::vector<entry_type>{list_})
+  { }
+
+  explicit Permutation(const std::vector<entry_type>& list) : cycles{} {
     size_type size = list.size();
     assert(size > 0);
     std::vector<bool> used(size);
@@ -37,7 +42,14 @@ public:
     }
   }
 
-  Permutation(const std::vector<std::vector<entry_type>>& cycles_) : cycles{} {
+private:
+  struct private_tag { };
+  
+  Permutation(std::vector<entry_type>&& cycles_, const private_tag&) : cycles(std::move(cycles_)) { }
+
+public:
+  static Permutation from_cycles(const std::initializer_list<std::vector<entry_type>>& cycles_) {
+    decltype(cycles) cycles{};
     for(const auto& cycle : cycles_) {
       assert(cycle.size() > 0);
       if(cycle.size() == 1)
@@ -45,14 +57,9 @@ public:
       std::copy(cycle.begin(), cycle.end(), std::back_inserter(cycles));
       cycles.push_back(cycle.front());
     }
+    return {std::move(cycles), private_tag{}};
   }
 
-private:
-  struct private_tag { };
-  
-  Permutation(std::vector<entry_type>&& cycles_, const private_tag&) : cycles(std::move(cycles_)) { }
-
-public:
   static Permutation from_numbered(numbered_type ix) {
     Permutation ret{};
     for(size_type i = 2; ix > 0; i++) {
@@ -63,7 +70,7 @@ public:
       std::vector<entry_type> cycle(rem + 2);
       std::iota(cycle.begin(), cycle.end() - 1, i - rem - 1);
       cycle.back() = cycle.front();
-      ret = Permutation{std::move(cycle), {}} * ret;
+      ret = Permutation{std::move(cycle), private_tag{}} * ret;
     }
     return ret;
   }
@@ -79,7 +86,7 @@ public:
       std::iota(cycle.begin(), cycle.end() - 1, j);
       std::reverse(cycle.begin(), cycle.end() - 1);
       cycle.back() = cycle.front();
-      p = Permutation{std::move(cycle), {}} * p;
+      p = Permutation{std::move(cycle), private_tag{}} * p;
     }
     return ret;
   }
@@ -143,7 +150,7 @@ public:
       }
       ncycles.push_back(start);
     }
-    return {std::move(ncycles), {}};
+    return {std::move(ncycles), private_tag{}};
   }
 
   Permutation& operator*=(const Permutation& other) {
@@ -175,7 +182,7 @@ public:
       std::reverse(it + 1, it2);
       it = it2;
     }
-    return {std::move(ncycles), {}};
+    return {std::move(ncycles), private_tag{}};
   }
 
   friend Permutation inverse(const Permutation& p) {

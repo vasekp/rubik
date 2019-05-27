@@ -44,26 +44,26 @@ public:
       case 3:
         switch(q) {
           case 3: // tetrahedron
-            a = {{1, 2, 0, 3}};
-            b = {{0, 2, 3, 1}};
+            a = {1, 2, 0, 3};
+            b = {0, 2, 3, 1};
             break;
           case 4: // octahedron
-            a = {{0, 2, 3, 1}};
-            b = {{3, 0, 1, 2}};
+            a = {0, 2, 3, 1};
+            b = {3, 0, 1, 2};
             break;
           case 5: // icosahedron
-            a = {{0, 2, 4, 3, 1}};
-            b = {{4, 0, 1, 2, 3}};
+            a = {0, 2, 4, 3, 1};
+            b = {4, 0, 1, 2, 3};
             break;
         }
         break;
       case 4: // cube
-        a = {{1, 2, 3, 0}};
-        b = {{0, 3, 1, 2}};
+        a = {1, 2, 3, 0};
+        b = {0, 3, 1, 2};
         break;
       case 5: // dodecahedron
-        a = {{1, 2, 3, 4, 0}};
-        b = {{0, 4, 1, 3, 2}};
+        a = {1, 2, 3, 4, 0};
+        b = {0, 4, 1, 3, 2};
         break;
     }
     assert(a.order() == p);
@@ -92,6 +92,10 @@ public:
     std::iota(v.begin(), v.end(), 0);
     std::reverse(v.begin() + 1, v.end());
     b = Permutation{v};
+
+    assert(a.order() == n);
+    assert(b.order() == 2);
+    assert((b*a).order() == 2);
 
     float alpha = M_PI/n;
     va = {0, -sin(alpha) * aspect, 0}; // same conventions as in Solid::platonic()
