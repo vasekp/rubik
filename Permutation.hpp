@@ -91,6 +91,10 @@ public:
     return ret;
   }
 
+  numbered_type to_numbered() const {
+    return Permutation::to_numbered(*this);
+  }
+
   std::vector<entry_type> to_list(size_type max) const {
     std::vector<entry_type> ret(max);
     std::iota(ret.begin(), ret.end(), 0);
@@ -112,6 +116,10 @@ public:
     return to_list(_max() + 1);
   }
 
+  static std::vector<entry_type> to_list(const Permutation& p) {
+    return p.to_list();
+  }
+
   std::vector<std::vector<entry_type>> to_cycles() const {
     std::vector<std::vector<entry_type>> ret{};
     for(auto it = cycles.begin(); it != cycles.end(); it++) {
@@ -122,6 +130,10 @@ public:
       it = it2;
     }
     return ret;
+  }
+
+  static std::vector<std::vector<entry_type>> to_cycles(const Permutation& p) {
+    return p.to_cycles();
   }
 
   entry_type operator[](entry_type ix) const {

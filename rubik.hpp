@@ -8,11 +8,12 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include "Solid.hpp"
+#include <optional>
 
 struct Piece {
   Volume volume;
-  Vertex center;
   glm::mat4 rotation;
+  glm::mat4 rotation_temp;
   GLvoid* gl_start;
   GLsizei gl_count;
 };
@@ -49,22 +50,28 @@ struct Context {
   } mxs;
   struct {
     glm::vec2 buttondown_loc;
-    bool buttondown;
+    bool rot_view;
+    bool rot_action;
+    glm::vec3 action_center;
+    std::optional<Cut> action_cut;
   } ui;
   std::vector<Piece> pieces;
 };
 
 void init_programs(Context& ctx);
 Volume init_shape(Context& ctx, float size, const std::vector<Cut>& cuts);
-void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cuts, const std::vector<glm::vec4>& colour_vals);
-void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts);
+void init_model(Context& ctx, const Volume& shape, const std::vector<Cut>& cuts, const std::vector<glm::vec4>& colour_vals);
+void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Cut>& cuts);
 void init_click_target(Context& ctx);
 
 void update_proj(Context& ctx, int w, int h);
 void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite);
-GLint get_click_volume(Context& ctx, glm::vec2 point);
+void rotate_action(Context& ctx, glm::vec2 loc);
+Index get_click_volume(Context& ctx, glm::vec2 point);
 
-void draw(Context& ctx, int);
+constexpr Index invalid_index = -1;
+
+void draw(Context& ctx);
 
 template<>
 struct element_traits<glm::mat4> {
