@@ -22,10 +22,14 @@ void button_cb(GLFWwindow* window, int, int action, int) {
   Context& ctx = *static_cast<Context*>(glfwGetWindowUserPointer(window));
   if(action == GLFW_PRESS) {
     ctx.ui.buttondown_loc = touch_location(window);
-    if(auto drag_volume = get_click_volume(ctx, ctx.ui.buttondown_loc); drag_volume == invalid_index) {
+    if(auto drag_volume = get_click_volume(ctx, ctx.ui.buttondown_loc); !drag_volume) {
       ctx.ui.rot_view = true;
     } else {
-      const Volume& v = ctx.pieces[drag_volume].volume;
+      std::cout << drag_volume->volume_index << ' '
+        << drag_volume->coords.x << ' '
+        << drag_volume->coords.y << ' '
+        << drag_volume->coords.z << '\n';
+      const Volume& v = ctx.pieces[drag_volume->volume_index].volume;
       auto cuts = v.get_rot_cuts();
       if(!cuts.empty()) {
         ctx.ui.rot_action = true;
