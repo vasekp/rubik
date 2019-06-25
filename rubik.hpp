@@ -9,6 +9,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include "Solid.hpp"
 #include <optional>
+#include <array>
 
 struct Piece {
   Volume volume;
@@ -35,7 +36,7 @@ struct Context {
       GLint matrix;
       GLint submodel;
       GLint location;
-      GLint tag;
+      GLint volume;
     } uniforms_click;
     GLuint fb_click;
     struct {
@@ -67,9 +68,13 @@ void init_click_target(Context& ctx);
 void update_proj(Context& ctx, int w, int h);
 void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite);
 void rotate_action(Context& ctx, glm::vec2 loc);
-Index get_click_volume(Context& ctx, glm::vec2 point);
 
-constexpr Index invalid_index = -1;
+struct click_response {
+  Index volume_index;
+  glm::vec3 coords;
+  glm::vec3 normal;
+};
+std::optional<click_response> get_click_volume(Context& ctx, glm::vec2 point);
 
 void draw(Context& ctx);
 

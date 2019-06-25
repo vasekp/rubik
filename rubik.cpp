@@ -10,7 +10,10 @@ namespace model_attribs {
 }
 
 namespace click_attribs {
-  constexpr GLint coords = 0;
+  enum {
+    coords,
+    normal
+  };
 }
 
 namespace texgen_attribs {
@@ -119,7 +122,7 @@ void init_programs(Context& ctx) {
   ctx.gl.uniforms_click.matrix = glGetUniformLocation(ctx.gl.prog_click, "matrix");
   ctx.gl.uniforms_click.submodel = glGetUniformLocation(ctx.gl.prog_click, "submodel");
   ctx.gl.uniforms_click.location = glGetUniformLocation(ctx.gl.prog_click, "loc");
-  ctx.gl.uniforms_click.tag = glGetUniformLocation(ctx.gl.prog_click, "u_tag");
+  ctx.gl.uniforms_click.volume = glGetUniformLocation(ctx.gl.prog_click, "volume");
 }
 
 Volume init_shape(Context&, float size, const std::vector<Cut>& cuts) {
@@ -202,6 +205,11 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Cut>& cuts,
   glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
   glEnableVertexAttribArray(click_attribs::coords);
   glVertexAttribPointer(click_attribs::coords, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
+
+  glBindBuffer(GL_ARRAY_BUFFER, buffers[NORMALS_VBO]);
+  glEnableVertexAttribArray(click_attribs::normal);
+  glVertexAttribPointer(click_attribs::normal, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
+
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
 
   ctx.mxs.view = glm::translate(glm::mat4{1}, glm::vec3(0, 0, 3));
@@ -377,26 +385,40 @@ void init_click_target(Context& ctx) {
   glBindFramebuffer(GL_FRAMEBUFFER, ctx.gl.fb_click);
 
   enum {
-    TAG,
     DEPTH,
+    TAG,
+    COORDS,
+    NORMAL,
     BUFFER_COUNT
   };
 
   GLuint renderbuffers[BUFFER_COUNT];
   glGenRenderbuffers(BUFFER_COUNT, &renderbuffers[0]);
 
-  glBindRenderbuffer(GL_RENDERBUFFER, renderbuffers[TAG]);
-  glRenderbufferStorage(GL_RENDERBUFFER, GL_R32I, 1, 1);
-  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, renderbuffers[TAG]);
-
   glBindRenderbuffer(GL_RENDERBUFFER, renderbuffers[DEPTH]);
   glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, 1, 1);
   glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, renderbuffers[DEPTH]);
 
+  glBindRenderbuffer(GL_RENDERBUFFER, renderbuffers[TAG]);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_R32I, 1, 1);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, renderbuffers[TAG]);
+
+  glBindRenderbuffer(GL_RENDERBUFFER, renderbuffers[COORDS]);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA32F, 1, 1);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_RENDERBUFFER, renderbuffers[COORDS]);
+
+  glBindRenderbuffer(GL_RENDERBUFFER, renderbuffers[NORMAL]);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA32F, 1, 1);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_RENDERBUFFER, renderbuffers[NORMAL]);
+
+  std::array<GLenum, 3> buffers;
+  std::iota(buffers.begin(), buffers.end(), GL_COLOR_ATTACHMENT0);
+  glDrawBuffers(buffers.size(), &buffers[0]);
+
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-Index get_click_volume(Context& ctx, glm::vec2 point) {
+std::optional<click_response> get_click_volume(Context& ctx, glm::vec2 point) {
   glBindFramebuffer(GL_FRAMEBUFFER, ctx.gl.fb_click);
   glViewport(0, 0, 1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -405,13 +427,22 @@ Index get_click_volume(Context& ctx, glm::vec2 point) {
   glUniformMatrix4fv(ctx.gl.uniforms_click.matrix, 1, GL_FALSE, glm::value_ptr(ctx.mxs.proj * ctx.mxs.view * ctx.mxs.model));
   glUniform2fv(ctx.gl.uniforms_click.location, 1, glm::value_ptr(point));
   glBindVertexArray(ctx.gl.vao_model);
-  GLint tag = 0;
+  GLint index = 0;
   for(auto& piece : ctx.pieces) {
     glUniformMatrix4fv(ctx.gl.uniforms_click.submodel, 1, GL_FALSE, glm::value_ptr(piece.rotation));
-    glUniform1i(ctx.gl.uniforms_click.tag, ++tag);
+    glUniform1i(ctx.gl.uniforms_click.volume, ++index);
     glDrawElements(GL_TRIANGLES, piece.gl_count, GL_UNSIGNED_SHORT, piece.gl_start);
   }
-  glReadPixels(0, 0, 1, 1, GL_RED_INTEGER, GL_INT, &tag);
+  glm::vec3 coords, normal;
+  glReadBuffer(GL_COLOR_ATTACHMENT0);
+  glReadPixels(0, 0, 1, 1, GL_RED_INTEGER, GL_INT, &index);
+  glReadBuffer(GL_COLOR_ATTACHMENT1);
+  glReadPixels(0, 0, 1, 1, GL_RGB, GL_FLOAT, &coords);
+  glReadBuffer(GL_COLOR_ATTACHMENT2);
+  glReadPixels(0, 0, 1, 1, GL_RGB, GL_FLOAT, &normal);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  return tag == 0 ? invalid_index : tag - 1;
+  if(index == 0)
+    return {};
+  else
+    return {{static_cast<Index>(index - 1), coords, normal}};
 }
