@@ -1,5 +1,27 @@
 #include "rubik.hpp"
 
+namespace {
+namespace model_attribs {
+  enum {
+    coords,
+    normal,
+    colour
+  };
+}
+
+namespace click_attribs {
+  constexpr GLint coords = 0;
+}
+
+namespace texgen_attribs {
+  enum {
+    coords,
+    tag,
+    normal
+  };
+}
+}
+
 void update_proj(Context& ctx, int w, int h) {
   ctx.gl.viewport = {w, h};
   float ratio = (float)w / h;
@@ -117,16 +139,6 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
         static_cast<GLint>(indices.size() - indexBase)});
   }
 
-  struct {
-    GLint coords;
-    GLint normal;
-    GLint colour;
-  } attribs = {
-    glGetAttribLocation(ctx.gl.prog_model, "in_coords"),
-    glGetAttribLocation(ctx.gl.prog_model, "in_normal"),
-    glGetAttribLocation(ctx.gl.prog_model, "in_colour")
-  };
-
   glGenVertexArrays(1, &ctx.gl.vao_model);
   glBindVertexArray(ctx.gl.vao_model);
 
@@ -142,18 +154,18 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, coords.size() * sizeof(coords[0]), coords.data(), GL_STATIC_DRAW);
-  glEnableVertexAttribArray(attribs.coords);
-  glVertexAttribPointer(attribs.coords, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
+  glEnableVertexAttribArray(model_attribs::coords);
+  glVertexAttribPointer(model_attribs::coords, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[NORMALS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(normals[0]), normals.data(), GL_STATIC_DRAW);
-  glEnableVertexAttribArray(attribs.normal);
-  glVertexAttribPointer(attribs.normal, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
+  glEnableVertexAttribArray(model_attribs::normal);
+  glVertexAttribPointer(model_attribs::normal, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[COLOURS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, colours.size() * sizeof(colours[0]), colours.data(), GL_STATIC_DRAW);
-  glEnableVertexAttribArray(attribs.colour);
-  glVertexAttribPointer(attribs.colour, 4, GL_FLOAT, GL_FALSE, sizeof(colours[0]), nullptr);
+  glEnableVertexAttribArray(model_attribs::colour);
+  glVertexAttribPointer(model_attribs::colour, 4, GL_FLOAT, GL_FALSE, sizeof(colours[0]), nullptr);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
@@ -163,10 +175,9 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
   glGenVertexArrays(1, &ctx.gl.vao_click);
   glBindVertexArray(ctx.gl.vao_click);
 
-  GLint click_coords = glGetAttribLocation(ctx.gl.prog_click, "coords");
   glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
-  glEnableVertexAttribArray(click_coords);
-  glVertexAttribPointer(click_coords, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
+  glEnableVertexAttribArray(click_attribs::coords);
+  glVertexAttribPointer(click_attribs::coords, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
 
   ctx.mxs.view = glm::translate(glm::mat4{1}, glm::vec3(0, 0, 3));
@@ -250,15 +261,6 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
     glGetUniformLocation(prog_texgen, "p_offset"),
     glGetUniformLocation(prog_texgen, "p_tag")
   };
-  struct {
-    GLint coords;
-    GLint tag;
-    GLint normal;
-  } attribs = {
-    glGetAttribLocation(prog_texgen, "in_coords"),
-    glGetAttribLocation(prog_texgen, "in_tag"),
-    glGetAttribLocation(prog_texgen, "in_normal")
-  };
 
   // main volume faces
 
@@ -291,18 +293,18 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, ext.get_vertices().size() * sizeof(Vertex), &ext.get_vertices()[0], GL_STATIC_DRAW);
-  glEnableVertexAttribArray(attribs.coords);
-  glVertexAttribPointer(attribs.coords, 3, GL_FLOAT, GL_FALSE, sizeof(ext.get_vertices()[0]), nullptr);
+  glEnableVertexAttribArray(texgen_attribs::coords);
+  glVertexAttribPointer(texgen_attribs::coords, 3, GL_FLOAT, GL_FALSE, sizeof(ext.get_vertices()[0]), nullptr);
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[TAGS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, tags.size() * sizeof(tags[0]), &tags[0], GL_STATIC_DRAW);
-  glEnableVertexAttribArray(attribs.tag);
-  glVertexAttribIPointer(attribs.tag, 1, GL_UNSIGNED_INT, sizeof(tags[0]), nullptr);
+  glEnableVertexAttribArray(texgen_attribs::tag);
+  glVertexAttribIPointer(texgen_attribs::tag, 1, GL_UNSIGNED_INT, sizeof(tags[0]), nullptr);
 
   glBindBuffer(GL_ARRAY_BUFFER, buffers[NORMALS_VBO]);
   glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals[0], GL_STATIC_DRAW);
-  glEnableVertexAttribArray(attribs.normal);
-  glVertexAttribPointer(attribs.normal, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
+  glEnableVertexAttribArray(texgen_attribs::normal);
+  glVertexAttribPointer(texgen_attribs::normal, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(Index), &indices[0], GL_STATIC_DRAW);

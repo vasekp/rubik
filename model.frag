@@ -9,7 +9,8 @@ in vec4 coords;
 in vec3 texCoord;
 in vec4 normal;
 in vec4 faceColour;
-out vec4 colour;
+
+layout(location = 0) out vec4 colour;
 
 const float ambient_int = 0.3;
 const vec4 light_dir = normalize(vec4(3, 3, -10, 0));

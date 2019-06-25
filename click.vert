@@ -7,7 +7,7 @@ uniform mat4 submodel;
 uniform int u_tag;
 uniform vec2 loc;
 
-in vec3 coords;
+layout(location = 0) in vec3 coords;
 
 flat out int tag;
 

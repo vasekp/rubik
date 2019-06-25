@@ -4,9 +4,9 @@ precision highp float;
 
 uniform mat4 proj;
 
-in vec3 in_coords;
-in uint in_tag;
-in vec3 in_normal;
+layout(location = 0) in vec3 in_coords;
+layout(location = 1) in uint in_tag;
+layout(location = 2) in vec3 in_normal;
 
 out vec3 coords;
 flat out uint f_tag;
