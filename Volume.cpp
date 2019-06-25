@@ -23,6 +23,21 @@ Vertex Volume::center() const {
   return ret / float(vertices.size());
 }
 
+std::vector<Cut> Volume::get_rot_cuts() const {
+  // Choose only faces that make a sensible rotation in Rubik models
+  std::vector<Cut> ret{};
+  Vertex c = center();
+  for(const auto& f : faces) {
+    float face_offset = glm::dot(f.normal, vertices[f.indices[0]]),
+          center_offset = glm::dot(f.normal, c);
+    if(face_offset < epsilon && center_offset < face_offset
+        && glm::length(glm::cross(f.normal, c)) > epsilon)
+      ret.push_back({{f.normal, face_offset}, f.tag});
+  }
+  // TODO: check on compatibility with other faces (for later)
+  return ret;
+}
+
 #ifdef DEBUG
 void Volume::dump() const {
   std::clog << "VOLUME:\n";

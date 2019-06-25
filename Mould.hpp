@@ -17,6 +17,10 @@ using std::size_t;
 using Index = uint16_t;
 using Vertex = glm::vec3;
 
+namespace {
+  constexpr float epsilon = 0.001;
+}
+
 struct Plane {
   glm::vec3 normal;
   float offset;
@@ -30,6 +34,22 @@ struct Plane {
 
   friend float operator*(const Plane& p, const Vertex& v) {
     return dot(p.normal, v) - p.offset;
+  }
+
+  friend bool operator>(const Vertex& v, const Plane& p) {
+    return p * v > epsilon;
+  }
+
+  friend bool operator>=(const Vertex& v, const Plane& p) {
+    return p * v > -epsilon;
+  }
+
+  friend bool operator<(const Vertex& v, const Plane& p) {
+    return p * v < -epsilon;
+  }
+
+  friend bool operator<=(const Vertex& v, const Plane& p) {
+    return p * v < epsilon;
   }
 };
 
@@ -93,6 +113,7 @@ public:
   bool empty() const { return faces.empty(); }
 
   Vertex center() const;
+  std::vector<Cut> get_rot_cuts() const;
 
   Volume cut(const Plane& p, Index tag = 0);
   void erode(float dist);
@@ -105,8 +126,6 @@ public:
 #endif
 
 private:
-  constexpr static float epsilon = 0.001;
-
   void add_intersections(const Plane& p);
   std::vector<Index> find_section(const Plane& p);
   std::vector<Index> traverse_start(const Face& f, const Plane& p);

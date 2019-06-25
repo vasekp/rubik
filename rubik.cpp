@@ -34,34 +34,57 @@ void update_proj(Context& ctx, int w, int h) {
   glUniformMatrix4fv(ctx.gl.uniforms_model.proj, 1, GL_FALSE, glm::value_ptr(ctx.mxs.proj));
 }
 
+glm::vec4 unproject(Context& ctx, glm::vec2 loc, float z) {
+  glm::vec4 v{ctx.mxs.proj * ctx.mxs.view * glm::vec4{0, 0, z, 1}};
+  glm::vec2 last_two = glm::vec2{v.z, v.w};
+  return inverse(ctx.mxs.proj * ctx.mxs.view) * glm::vec4{last_two.y * loc, last_two};
+}
+
 void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite) {
-  loc -= ctx.ui.buttondown_loc;
-  glm::vec2 last_two = [&ctx]() -> auto {
-    glm::vec4 v{ctx.mxs.proj * glm::vec4{0, 0, 1, 1}};
-    return glm::vec2{v.z, v.w};
-  }();
-  glm::vec2 modelcoord = glm::vec2{inverse(ctx.mxs.proj) * glm::vec4{last_two.y * loc, last_two}};
+  glm::vec2 model_offset = glm::vec2{unproject(ctx, loc - ctx.ui.buttondown_loc, 0)};
   glm::mat4 model = glm::rotate(
       glm::rotate(
         glm::mat4{1},
-        -modelcoord.x, {0, 1, 0}),
-      modelcoord.y, {1, 0, 0}) * ctx.mxs.model;
+        -model_offset.x, {0, 1, 0}),
+      model_offset.y, {1, 0, 0}) * ctx.mxs.model;
   glUseProgram(ctx.gl.prog_model);
   glUniformMatrix4fv(ctx.gl.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.mxs.view * model));
   if(rewrite)
     ctx.mxs.model = model;
 }
 
-void draw(Context& ctx, int t) {
+void rotate_action(Context& ctx, glm::vec2 loc) {
+  const Plane& p = ctx.ui.action_cut->plane;
+  glm::vec3 center_proj = glm::dot(p.normal, ctx.ui.action_center) * p.normal;
+  glm::vec3 rot_center = glm::mat3{ctx.mxs.model} * center_proj;
+  glm::vec2 model_offset = glm::vec2{unproject(ctx, loc - ctx.ui.buttondown_loc, rot_center.z)};
+  glm::vec2 normal_proj = glm::normalize(glm::vec2{ctx.mxs.model * glm::vec4{p.normal, 0.f}});
+#if 0
+  std::cout << rot_center.z << "  "
+    << model_offset.x << ' ' << model_offset.y << "  "
+    << normal_proj.x << ' ' << normal_proj.y << '\n';
+#endif
+  float rot_radius = glm::length(ctx.ui.action_center - center_proj);
+  float cross = model_offset.x * normal_proj.y - model_offset.y * normal_proj.x;
+  float angle = -M_PI / (2 * rot_radius) * cross;
+  for(auto& piece : ctx.pieces) {
+    piece.rotation_temp = piece.volume.center() < p
+      ? glm::rotate(glm::mat4{1}, angle, p.normal)
+      : glm::mat4{1};
+  }
+}
+
+void draw(Context& ctx) {
   glViewport(0, 0, ctx.gl.viewport.w, ctx.gl.viewport.h);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glUseProgram(ctx.gl.prog_model);
   glBindVertexArray(ctx.gl.vao_model);
-  int tag = 0;
+  Index tag = 0;
   for(auto& piece : ctx.pieces) {
-    glUniformMatrix4fv(ctx.gl.uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(piece.rotation));
-    glUniform1i(ctx.gl.uniforms_model.highlight, ++tag == t ? GL_TRUE : GL_FALSE);
+    glUniformMatrix4fv(ctx.gl.uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(piece.rotation * piece.rotation_temp));
+    glUniform1i(ctx.gl.uniforms_model.highlight, GL_FALSE); //tag == ctx.ui.drag_volume ? GL_TRUE : GL_FALSE); TODO remove highlight completely
     glDrawElements(GL_TRIANGLES, piece.gl_count, GL_UNSIGNED_SHORT, piece.gl_start);
+    tag++;
   }
 }
 
@@ -106,10 +129,10 @@ Volume init_shape(Context&, float size, const std::vector<Cut>& cuts) {
   return shape;
 }
 
-void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cuts, const std::vector<glm::vec4>& /*colour_vals*/) {
+void init_model(Context& ctx, const Volume& shape, const std::vector<Cut>& cuts, const std::vector<glm::vec4>& /*colour_vals*/) {
   Mould m{shape};
-  for(const auto& plane : cuts)
-    m.cut(plane);
+  for(const auto& cut : cuts)
+    m.cut(cut.plane, cut.tag);
   
   std::vector<glm::vec3> coords{};
   std::vector<glm::vec3> normals{};
@@ -118,6 +141,7 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
 
   ctx.pieces.resize(0);
   for(auto volume : m.get_volumes()) {
+    auto orig_volume = volume;
     volume.erode(0.03);
     volume.dilate(0.03);
     size_t base = coords.size();
@@ -132,8 +156,8 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
     }
     append_face_list(indices, base, volume.get_faces());
     ctx.pieces.push_back({
-        volume,
-        volume.center(),
+        orig_volume,
+        glm::mat4{1},
         glm::mat4{1},
         reinterpret_cast<void*>(indexBase * sizeof(Index)),
         static_cast<GLint>(indices.size() - indexBase)});
@@ -192,7 +216,7 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Plane>& cut
   glUniformMatrix4fv(ctx.gl.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.mxs.view * ctx.mxs.model));
 }
 
-void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Plane>& cuts) {
+void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Cut>& cuts) {
   constexpr GLuint texSize = 1024;
 
   struct {
@@ -322,9 +346,9 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
     glClear(GL_COLOR_BUFFER_BIT);
     glUniformMatrix4fv(uniforms.proj, 1, GL_FALSE, glm::value_ptr(proj));
 
-    for(const auto& plane : cuts) {
-      glUniform3fv(uniforms.p_normal, 1, glm::value_ptr(plane.normal));
-      glUniform1f(uniforms.p_offset, plane.offset);
+    for(const auto& cut : cuts) {
+      glUniform3fv(uniforms.p_normal, 1, glm::value_ptr(cut.plane.normal));
+      glUniform1f(uniforms.p_offset, cut.plane.offset);
       glUniform1ui(uniforms.p_tag, 0);
       glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
     }
@@ -372,7 +396,7 @@ void init_click_target(Context& ctx) {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-GLint get_click_volume(Context& ctx, glm::vec2 point) {
+Index get_click_volume(Context& ctx, glm::vec2 point) {
   glBindFramebuffer(GL_FRAMEBUFFER, ctx.gl.fb_click);
   glViewport(0, 0, 1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -389,5 +413,5 @@ GLint get_click_volume(Context& ctx, glm::vec2 point) {
   }
   glReadPixels(0, 0, 1, 1, GL_RED_INTEGER, GL_INT, &tag);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  return tag;
+  return tag == 0 ? invalid_index : tag - 1;
 }

@@ -21,13 +21,30 @@ void resize_cb(GLFWwindow* window, int w, int h) {
 void button_cb(GLFWwindow* window, int, int action, int) {
   Context& ctx = *static_cast<Context*>(glfwGetWindowUserPointer(window));
   if(action == GLFW_PRESS) {
-    ctx.ui.buttondown = true;
     ctx.ui.buttondown_loc = touch_location(window);
+    if(auto drag_volume = get_click_volume(ctx, ctx.ui.buttondown_loc); drag_volume == invalid_index) {
+      ctx.ui.rot_view = true;
+    } else {
+      const Volume& v = ctx.pieces[drag_volume].volume;
+      auto cuts = v.get_rot_cuts();
+      if(!cuts.empty()) {
+        ctx.ui.rot_action = true;
+        ctx.ui.action_center = v.center(); 
+        ctx.ui.action_cut = cuts.back();
+      } else
+        ctx.ui.rot_view = true;
+    }
   } else {
-    ctx.ui.buttondown = false;
-    double x, y;
-    glfwGetCursorPos(window, &x, &y);
-    rotate_model(ctx, touch_location(window), true);
+    if(ctx.ui.rot_view) {
+      double x, y;
+      glfwGetCursorPos(window, &x, &y);
+      rotate_model(ctx, touch_location(window), true);
+      ctx.ui.rot_view = false;
+    } else if(ctx.ui.rot_action) {
+      for(auto& piece : ctx.pieces)
+        piece.rotation_temp = glm::mat4{1};
+      ctx.ui.rot_action = false;
+    }
   }
 }
 
@@ -62,7 +79,7 @@ int main() {
   constexpr unsigned tex_cubemap = 0;
 
   std::vector<Cut> shape_cuts{};
-  std::vector<Plane> cuts{};
+  std::vector<Cut> cuts{};
 
   /*Solid shape = Solid::platonic(4, 3);
   Index ix = 0;
@@ -77,13 +94,15 @@ int main() {
   float r_edge = shape.r_edge();
   for(const auto& [perm, vector] : shape.edge_dirs()) {
     shape_cuts.push_back({{vector, r_edge}, ++ix});
-    cuts.push_back({vector, -r_edge / 2});
-    cuts.push_back({vector, r_edge / 4});
+    auto transform = perm * shape.edge_perm() * perm.inverse();
+    cuts.push_back({{vector, r_edge / 4}, static_cast<Index>(transform.to_numbered())});
+    cuts.push_back({{-vector, r_edge / 2}, static_cast<Index>(transform.inverse().to_numbered())});
   }
   float r_face = shape.r_face();
   for(const auto& [perm, vector] : shape.face_dirs()) {
     shape_cuts.push_back({{vector, r_face}, ++ix});
-    cuts.push_back({vector, 0});
+    auto transform = perm * shape.face_perm() * perm.inverse();
+    cuts.push_back({{vector, 0}, static_cast<Index>(transform.to_numbered())});
   }
 
   try {
@@ -105,9 +124,11 @@ int main() {
     resize_cb(window, 0, 0);
     while(!glfwWindowShouldClose(window)) {
       glm::vec2 loc = touch_location(window);
-      if(ctx.ui.buttondown)
+      if(ctx.ui.rot_view)
         rotate_model(ctx, loc, false);
-      draw(ctx, 0/*get_click_volume(ctx, loc)*/);
+      if(ctx.ui.rot_action)
+        rotate_action(ctx, loc);
+      draw(ctx);
       glfwSwapBuffers(window);
       glfwPollEvents();
     }
