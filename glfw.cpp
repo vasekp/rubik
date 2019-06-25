@@ -118,7 +118,8 @@ int main() {
     init_programs(ctx);
     Volume shape = init_shape(ctx, 2, shape_cuts);
     init_model(ctx, shape, cuts, {}/*colours*/);
-    init_cubemap(ctx, tex_cubemap, shape, shape_cuts, cuts);
+    init_model_basic(ctx, shape);
+    init_cubemap(ctx, tex_cubemap, shape_cuts, cuts);
     init_click_target(ctx);
 
     glEnable(GL_CULL_FACE);

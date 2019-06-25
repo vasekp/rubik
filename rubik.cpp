@@ -9,18 +9,21 @@ namespace model_attribs {
   };
 }
 
-namespace click_attribs {
-  enum {
-    coords,
-    normal
-  };
-}
-
 namespace texgen_attribs {
   enum {
     coords,
+    normal,
+    dummy,
+    tag
+  };
+}
+
+namespace click_outputs {
+  enum {
     tag,
-    normal
+    coords,
+    normal,
+    count
   };
 }
 }
@@ -78,10 +81,11 @@ void rotate_action(Context& ctx, glm::vec2 loc) {
 }
 
 void draw(Context& ctx) {
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(0, 0, ctx.gl.viewport.w, ctx.gl.viewport.h);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glUseProgram(ctx.gl.prog_model);
-  glBindVertexArray(ctx.gl.vao_model);
+  glBindVertexArray(ctx.gl.vao_full);
   Index tag = 0;
   for(auto& piece : ctx.pieces) {
     glUniformMatrix4fv(ctx.gl.uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(piece.rotation * piece.rotation_temp));
@@ -166,8 +170,8 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Cut>& cuts,
         static_cast<GLint>(indices.size() - indexBase)});
   }
 
-  glGenVertexArrays(1, &ctx.gl.vao_model);
-  glBindVertexArray(ctx.gl.vao_model);
+  glGenVertexArrays(1, &ctx.gl.vao_full);
+  glBindVertexArray(ctx.gl.vao_full);
 
   enum {
     COORDS_VBO,
@@ -197,21 +201,6 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Cut>& cuts,
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
 
-  // a simplified VAO for click event processing
-
-  glGenVertexArrays(1, &ctx.gl.vao_click);
-  glBindVertexArray(ctx.gl.vao_click);
-
-  glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
-  glEnableVertexAttribArray(click_attribs::coords);
-  glVertexAttribPointer(click_attribs::coords, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
-
-  glBindBuffer(GL_ARRAY_BUFFER, buffers[NORMALS_VBO]);
-  glEnableVertexAttribArray(click_attribs::normal);
-  glVertexAttribPointer(click_attribs::normal, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
-
   ctx.mxs.view = glm::translate(glm::mat4{1}, glm::vec3(0, 0, 3));
   ctx.mxs.model = glm::rotate(
       glm::rotate(
@@ -224,7 +213,55 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Cut>& cuts,
   glUniformMatrix4fv(ctx.gl.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.mxs.view * ctx.mxs.model));
 }
 
-void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Cut>& cuts) {
+void init_model_basic(Context& ctx, Volume shape) {
+  std::vector<glm::vec3> normals{};
+  std::vector<Index> indices{};
+  std::vector<glm::uint> tags{};
+
+  shape.dilate(0);
+  for(const auto& face : shape.get_faces()) {
+    if(face.tag == Volume::dilate_face_tag)
+      continue;
+    std::fill_n(std::back_inserter(tags), face.indices.size(), static_cast<glm::uint>(face.tag));
+    std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
+  }
+  append_face_list(indices, 0, shape.get_faces());
+
+  glGenVertexArrays(1, &ctx.gl.vao_basic);
+  glBindVertexArray(ctx.gl.vao_basic);
+
+  enum {
+    COORDS_VBO,
+    NORMALS_VBO,
+    TAGS_VBO,
+    INDICES_IBO,
+    BUFFER_COUNT
+  };
+  GLuint buffers[BUFFER_COUNT];
+  glGenBuffers(BUFFER_COUNT, &buffers[0]);
+
+  const auto& coords = shape.get_vertices();
+  glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
+  glBufferData(GL_ARRAY_BUFFER, coords.size() * sizeof(coords[0]), coords.data(), GL_STATIC_DRAW);
+  glEnableVertexAttribArray(model_attribs::coords);
+  glVertexAttribPointer(model_attribs::coords, 3, GL_FLOAT, GL_FALSE, sizeof(coords[0]), nullptr);
+
+  glBindBuffer(GL_ARRAY_BUFFER, buffers[NORMALS_VBO]);
+  glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(normals[0]), normals.data(), GL_STATIC_DRAW);
+  glEnableVertexAttribArray(model_attribs::normal);
+  glVertexAttribPointer(model_attribs::normal, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
+
+  glBindBuffer(GL_ARRAY_BUFFER, buffers[TAGS_VBO]);
+  glBufferData(GL_ARRAY_BUFFER, tags.size() * sizeof(tags[0]), &tags[0], GL_STATIC_DRAW);
+  glEnableVertexAttribArray(texgen_attribs::tag);
+  glVertexAttribIPointer(texgen_attribs::tag, 1, GL_UNSIGNED_INT, sizeof(tags[0]), nullptr);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(indices[0]), indices.data(), GL_STATIC_DRAW);
+  ctx.gl.basic_size = indices.size();
+}
+
+void init_cubemap(Context& ctx, unsigned texUnit, const std::vector<Cut>& shape_cuts, const std::vector<Cut>& cuts) {
   constexpr GLuint texSize = 1024;
 
   struct {
@@ -294,53 +331,6 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
     glGetUniformLocation(prog_texgen, "p_tag")
   };
 
-  // main volume faces
-
-  std::vector<Index> indices{};
-  std::vector<glm::uint> tags{};
-  std::vector<glm::vec3> normals{};
-  Volume ext = main_volume;
-  ext.dilate(0);
-  append_face_list(indices, 0, ext.get_faces());
-  for(const auto& face : ext.get_faces()) {
-    if(face.tag == Volume::dilate_face_tag)
-      continue;
-    std::fill_n(std::back_inserter(tags), face.indices.size(), static_cast<glm::uint>(face.tag));
-    std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
-  }
-
-  GLuint vao_texgen;
-  glGenVertexArrays(1, &vao_texgen);
-  glBindVertexArray(vao_texgen);
-
-  enum {
-    COORDS_VBO,
-    TAGS_VBO,
-    NORMALS_VBO,
-    INDICES_IBO,
-    BUFFER_COUNT
-  };
-  GLuint buffers[BUFFER_COUNT];
-  glGenBuffers(BUFFER_COUNT, &buffers[0]);
-
-  glBindBuffer(GL_ARRAY_BUFFER, buffers[COORDS_VBO]);
-  glBufferData(GL_ARRAY_BUFFER, ext.get_vertices().size() * sizeof(Vertex), &ext.get_vertices()[0], GL_STATIC_DRAW);
-  glEnableVertexAttribArray(texgen_attribs::coords);
-  glVertexAttribPointer(texgen_attribs::coords, 3, GL_FLOAT, GL_FALSE, sizeof(ext.get_vertices()[0]), nullptr);
-
-  glBindBuffer(GL_ARRAY_BUFFER, buffers[TAGS_VBO]);
-  glBufferData(GL_ARRAY_BUFFER, tags.size() * sizeof(tags[0]), &tags[0], GL_STATIC_DRAW);
-  glEnableVertexAttribArray(texgen_attribs::tag);
-  glVertexAttribIPointer(texgen_attribs::tag, 1, GL_UNSIGNED_INT, sizeof(tags[0]), nullptr);
-
-  glBindBuffer(GL_ARRAY_BUFFER, buffers[NORMALS_VBO]);
-  glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals[0], GL_STATIC_DRAW);
-  glEnableVertexAttribArray(texgen_attribs::normal);
-  glVertexAttribPointer(texgen_attribs::normal, 3, GL_FLOAT, GL_FALSE, sizeof(normals[0]), nullptr);
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES_IBO]);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(Index), &indices[0], GL_STATIC_DRAW);
-
   // paint cuts
 
   glViewport(0, 0, texSize, texSize);
@@ -348,6 +338,7 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
   glUseProgram(prog_texgen);
   glEnable(GL_BLEND);
   glBlendFunc(GL_DST_COLOR, GL_ZERO);
+  glBindVertexArray(ctx.gl.vao_basic);
 
   for(auto& [face, proj] : faces) {
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, face, texture, 0);
@@ -358,14 +349,14 @@ void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, con
       glUniform3fv(uniforms.p_normal, 1, glm::value_ptr(cut.plane.normal));
       glUniform1f(uniforms.p_offset, cut.plane.offset);
       glUniform1ui(uniforms.p_tag, 0);
-      glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
+      glDrawElements(GL_TRIANGLES, ctx.gl.basic_size, GL_UNSIGNED_SHORT, nullptr);
     }
 
     for(const auto& cut : shape_cuts) {
       glUniform3fv(uniforms.p_normal, 1, glm::value_ptr(cut.plane.normal));
       glUniform1f(uniforms.p_offset, cut.plane.offset);
       glUniform1ui(uniforms.p_tag, cut.tag);
-      glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, nullptr);
+      glDrawElements(GL_TRIANGLES, ctx.gl.basic_size, GL_UNSIGNED_SHORT, nullptr);
     }
   }
 
@@ -401,17 +392,17 @@ void init_click_target(Context& ctx) {
 
   glBindRenderbuffer(GL_RENDERBUFFER, renderbuffers[TAG]);
   glRenderbufferStorage(GL_RENDERBUFFER, GL_R32I, 1, 1);
-  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, renderbuffers[TAG]);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + click_outputs::tag, GL_RENDERBUFFER, renderbuffers[TAG]);
 
   glBindRenderbuffer(GL_RENDERBUFFER, renderbuffers[COORDS]);
   glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA32F, 1, 1);
-  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_RENDERBUFFER, renderbuffers[COORDS]);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + click_outputs::coords, GL_RENDERBUFFER, renderbuffers[COORDS]);
 
   glBindRenderbuffer(GL_RENDERBUFFER, renderbuffers[NORMAL]);
   glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA32F, 1, 1);
-  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_RENDERBUFFER, renderbuffers[NORMAL]);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + click_outputs::normal, GL_RENDERBUFFER, renderbuffers[NORMAL]);
 
-  std::array<GLenum, 3> buffers;
+  std::array<GLenum, click_outputs::count> buffers;
   std::iota(buffers.begin(), buffers.end(), GL_COLOR_ATTACHMENT0);
   glDrawBuffers(buffers.size(), &buffers[0]);
 
@@ -421,28 +412,33 @@ void init_click_target(Context& ctx) {
 std::optional<click_response> get_click_volume(Context& ctx, glm::vec2 point) {
   glBindFramebuffer(GL_FRAMEBUFFER, ctx.gl.fb_click);
   glViewport(0, 0, 1, 1);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glUseProgram(ctx.gl.prog_click);
-  glBindVertexArray(ctx.gl.vao_click);
   glUniformMatrix4fv(ctx.gl.uniforms_click.matrix, 1, GL_FALSE, glm::value_ptr(ctx.mxs.proj * ctx.mxs.view * ctx.mxs.model));
   glUniform2fv(ctx.gl.uniforms_click.location, 1, glm::value_ptr(point));
-  glBindVertexArray(ctx.gl.vao_model);
+
+  glBindVertexArray(ctx.gl.vao_full);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   GLint index = 0;
   for(auto& piece : ctx.pieces) {
     glUniformMatrix4fv(ctx.gl.uniforms_click.submodel, 1, GL_FALSE, glm::value_ptr(piece.rotation));
     glUniform1i(ctx.gl.uniforms_click.volume, ++index);
     glDrawElements(GL_TRIANGLES, piece.gl_count, GL_UNSIGNED_SHORT, piece.gl_start);
   }
-  glm::vec3 coords, normal;
   glReadBuffer(GL_COLOR_ATTACHMENT0);
   glReadPixels(0, 0, 1, 1, GL_RED_INTEGER, GL_INT, &index);
+
+  if(index == 0)
+    return {};
+  // else
+
+  glBindVertexArray(ctx.gl.vao_basic);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glUniformMatrix4fv(ctx.gl.uniforms_click.submodel, 1, GL_FALSE, glm::value_ptr(glm::mat4{1}));
+  glDrawElements(GL_TRIANGLES, ctx.gl.basic_size, GL_UNSIGNED_SHORT, nullptr);
+  glm::vec3 coords, normal;
   glReadBuffer(GL_COLOR_ATTACHMENT1);
   glReadPixels(0, 0, 1, 1, GL_RGB, GL_FLOAT, &coords);
   glReadBuffer(GL_COLOR_ATTACHMENT2);
   glReadPixels(0, 0, 1, 1, GL_RGB, GL_FLOAT, &normal);
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  if(index == 0)
-    return {};
-  else
-    return {{static_cast<Index>(index - 1), coords, normal}};
+  return {{static_cast<Index>(index - 1), coords, normal}};
 }

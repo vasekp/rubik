@@ -21,8 +21,9 @@ struct Piece {
 
 struct Context {
   struct {
-    GLuint vao_model;
-    GLuint vao_click;
+    GLuint vao_full;
+    GLuint vao_basic;
+    GLsizei basic_size;
     GLutil::program prog_model;
     GLutil::program prog_click;
     struct {
@@ -62,7 +63,8 @@ struct Context {
 void init_programs(Context& ctx);
 Volume init_shape(Context& ctx, float size, const std::vector<Cut>& cuts);
 void init_model(Context& ctx, const Volume& shape, const std::vector<Cut>& cuts, const std::vector<glm::vec4>& colour_vals);
-void init_cubemap(Context& ctx, unsigned texUnit, const Volume& main_volume, const std::vector<Cut>& shape_cuts, const std::vector<Cut>& cuts);
+void init_model_basic(Context& ctx, Volume shape);
+void init_cubemap(Context& ctx, unsigned texUnit, const std::vector<Cut>& shape_cuts, const std::vector<Cut>& cuts);
 void init_click_target(Context& ctx);
 
 void update_proj(Context& ctx, int w, int h);
