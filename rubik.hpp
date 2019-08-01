@@ -61,10 +61,10 @@ struct Context {
 };
 
 void init_programs(Context& ctx);
-Volume init_shape(Context& ctx, float size, const std::vector<Cut>& cuts);
+Volume init_shape(Context& ctx, float size, const std::vector<Plane>& shape_cuts);
 void init_model(Context& ctx, const Volume& shape, const std::vector<Cut>& cuts, const std::vector<glm::vec4>& colour_vals);
 void init_model_basic(Context& ctx, Volume shape);
-void init_cubemap(Context& ctx, unsigned texUnit, const std::vector<Cut>& shape_cuts, const std::vector<Cut>& cuts);
+void init_cubemap(Context& ctx, unsigned texUnit, const std::vector<Plane>& shape_cuts, const std::vector<Cut>& cuts);
 void init_click_target(Context& ctx);
 
 void update_proj(Context& ctx, int w, int h);

@@ -86,12 +86,10 @@ void draw(Context& ctx) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glUseProgram(ctx.gl.prog_model);
   glBindVertexArray(ctx.gl.vao_full);
-  Index tag = 0;
   for(auto& piece : ctx.pieces) {
     glUniformMatrix4fv(ctx.gl.uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(piece.rotation * piece.rotation_temp));
     glUniform1i(ctx.gl.uniforms_model.highlight, GL_FALSE); //tag == ctx.ui.drag_volume ? GL_TRUE : GL_FALSE); TODO remove highlight completely
     glDrawElements(GL_TRIANGLES, piece.gl_count, GL_UNSIGNED_SHORT, piece.gl_start);
-    tag++;
   }
 }
 
@@ -129,17 +127,18 @@ void init_programs(Context& ctx) {
   ctx.gl.uniforms_click.volume = glGetUniformLocation(ctx.gl.prog_click, "volume");
 }
 
-Volume init_shape(Context&, float size, const std::vector<Cut>& cuts) {
+Volume init_shape(Context&, float size, const std::vector<Plane>& shape_cuts) {
   Volume shape{size};
-  for(const auto& cut : cuts)
-    shape.cut(cut.plane, cut.tag);
+  size_t ix = 1;
+  for(const auto& plane : shape_cuts)
+    shape.cut(plane, ix++, Face::Type::outer);
   return shape;
 }
 
 void init_model(Context& ctx, const Volume& shape, const std::vector<Cut>& cuts, const std::vector<glm::vec4>& /*colour_vals*/) {
   Mould m{shape};
   for(const auto& cut : cuts)
-    m.cut(cut.plane, cut.tag);
+    m.cut(cut.plane, cut.tag, Face::Type::inner);
   
   std::vector<glm::vec3> coords{};
   std::vector<glm::vec3> normals{};
@@ -156,10 +155,11 @@ void init_model(Context& ctx, const Volume& shape, const std::vector<Cut>& cuts,
     const auto& vertices = volume.get_vertices();
     std::copy(begin(vertices), end(vertices), std::back_inserter(coords));
     for(const auto& face : volume.get_faces()) {
-      if(face.tag == Volume::dilate_face_tag)
+      if(face.type == Face::Type::bevel)
         continue;
       std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
-      std::fill_n(std::back_inserter(colours), face.indices.size(), glm::vec4(face.tag > 0 ? 1 : 0) /*colour_vals[face.tag]*/);
+      std::fill_n(std::back_inserter(colours), face.indices.size(),
+          glm::vec4(face.type == Face::Type::outer ? 1 : 0) /*colour_vals[face.tag]*/);
     }
     append_face_list(indices, base, volume.get_faces());
     ctx.pieces.push_back({
@@ -220,9 +220,10 @@ void init_model_basic(Context& ctx, Volume shape) {
 
   shape.dilate(0);
   for(const auto& face : shape.get_faces()) {
-    if(face.tag == Volume::dilate_face_tag)
+    if(face.type == Face::Type::bevel)
       continue;
-    std::fill_n(std::back_inserter(tags), face.indices.size(), static_cast<glm::uint>(face.tag));
+    std::fill_n(std::back_inserter(tags), face.indices.size(), 
+        static_cast<glm::uint>(face.type == Face::Type::outer ? face.tag : 0));
     std::fill_n(std::back_inserter(normals), face.indices.size(), face.normal);
   }
   append_face_list(indices, 0, shape.get_faces());
@@ -261,7 +262,7 @@ void init_model_basic(Context& ctx, Volume shape) {
   ctx.gl.basic_size = indices.size();
 }
 
-void init_cubemap(Context& ctx, unsigned texUnit, const std::vector<Cut>& shape_cuts, const std::vector<Cut>& cuts) {
+void init_cubemap(Context& ctx, unsigned texUnit, const std::vector<Plane>& shape_cuts, const std::vector<Cut>& cuts) {
   constexpr GLuint texSize = 1024;
 
   struct {
@@ -352,10 +353,10 @@ void init_cubemap(Context& ctx, unsigned texUnit, const std::vector<Cut>& shape_
       glDrawElements(GL_TRIANGLES, ctx.gl.basic_size, GL_UNSIGNED_SHORT, nullptr);
     }
 
-    for(const auto& cut : shape_cuts) {
-      glUniform3fv(uniforms.p_normal, 1, glm::value_ptr(cut.plane.normal));
-      glUniform1f(uniforms.p_offset, cut.plane.offset);
-      glUniform1ui(uniforms.p_tag, cut.tag);
+    for(const auto& plane : shape_cuts) {
+      glUniform3fv(uniforms.p_normal, 1, glm::value_ptr(plane.normal));
+      glUniform1f(uniforms.p_offset, plane.offset);
+      glUniform1ui(uniforms.p_tag, 1 + std::distance(&shape_cuts[0], &plane));
       glDrawElements(GL_TRIANGLES, ctx.gl.basic_size, GL_UNSIGNED_SHORT, nullptr);
     }
   }

@@ -63,13 +63,23 @@ struct Face {
   glm::vec3 normal;
   Index tag;
 
-  Face(std::vector<Index>&& indices_, glm::vec3 normal_, Index tag_ = 0)
-    : indices(std::move(indices_)), normal(normal_), tag(tag_) { }
+  enum class Type {
+    unset,
+    inner,
+    outer,
+    bevel
+  } type;
 
-  Face(glm::vec3 normal_, Index tag_)
-    : Face({}, normal_, tag_) { }
+  Face(std::vector<Index>&& indices_, glm::vec3 normal_, Index tag_, Type type_)
+    : indices(std::move(indices_)), normal(normal_), tag(tag_), type(type_) { }
 
-  Face() : Face({}, 0) { }
+  Face(std::vector<Index>&& indices_, glm::vec3 normal_)
+    : Face(std::move(indices_), normal_, 0, Type::unset) { }
+
+  Face(glm::vec3 normal, Index tag, Type type)
+    : Face({}, normal, tag, type) { }
+
+  Face() : Face({}, 0, Type::unset) { }
 
   int index(Index ix) const {
     return std::distance(indices.begin(), std::find(indices.begin(), indices.end(), ix));
@@ -115,11 +125,9 @@ public:
   Vertex center() const;
   std::vector<Cut> get_rot_cuts() const;
 
-  Volume cut(const Plane& p, Index tag = 0);
+  Volume cut(const Plane& p, Index tag, Face::Type type);
   void erode(float dist);
   void dilate(float dist);
-
-  constexpr static Index dilate_face_tag = -1;
 
 #ifdef DEBUG
   void dump() const;
@@ -144,13 +152,13 @@ public:
     volumes.push_back(std::move(v));
   }
 
-  void cut(const Plane& p, Index tag = 0) {
+  void cut(const Plane& p, Index tag, Face::Type type) {
 #ifdef DEBUG
     std::clog << "\nMould::cut\n";
 #endif
     std::vector<Volume> nvolumes{};
     for(auto& volume : volumes) {
-      Volume outer = volume.cut(p, tag);
+      Volume outer = volume.cut(p, tag, type);
       if(volume.empty())
         std::swap(volume, outer);
       if(!outer.empty())
