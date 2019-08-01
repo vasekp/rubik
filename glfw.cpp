@@ -82,7 +82,7 @@ GLFWwindow* init_glfw() {
 int main() {
   constexpr unsigned tex_cubemap = 0;
 
-  std::vector<Cut> shape_cuts{};
+  std::vector<Plane> shape_cuts{};
   std::vector<Cut> cuts{};
 
   /*Solid shape = Solid::platonic(4, 3);
@@ -94,17 +94,16 @@ int main() {
   }*/
 
   Solid shape = Solid::dihedral(3, 0.5);
-  Index ix = 0;
   float r_edge = shape.r_edge();
   for(const auto& [perm, vector] : shape.edge_dirs()) {
-    shape_cuts.push_back({{vector, r_edge}, ++ix});
+    shape_cuts.push_back({vector, r_edge});
     auto transform = perm * shape.edge_perm() * perm.inverse();
     cuts.push_back({{vector, r_edge / 4}, static_cast<Index>(transform.to_numbered())});
     cuts.push_back({{-vector, r_edge / 2}, static_cast<Index>(transform.inverse().to_numbered())});
   }
   float r_face = shape.r_face();
   for(const auto& [perm, vector] : shape.face_dirs()) {
-    shape_cuts.push_back({{vector, r_face}, ++ix});
+    shape_cuts.push_back({vector, r_face});
     auto transform = perm * shape.face_perm() * perm.inverse();
     cuts.push_back({{vector, 0}, static_cast<Index>(transform.to_numbered())});
   }

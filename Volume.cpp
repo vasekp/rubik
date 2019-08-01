@@ -59,7 +59,7 @@ void Volume::dump() const {
 }
 #endif
 
-Volume Volume::cut(const Plane& p, Index tag) {
+Volume Volume::cut(const Plane& p, Index tag, Face::Type type) {
 #ifdef DEBUG
   std::clog << "\nVolume::cut\n";
 #endif
@@ -92,11 +92,11 @@ Volume Volume::cut(const Plane& p, Index tag) {
 #endif
   std::vector<Index> secReverse = section;
   std::reverse(secReverse.begin(), secReverse.end());
-  volIn.faces.emplace_back(std::move(section), p.normal, tag);
-  volOut.faces.emplace_back(std::move(secReverse), -p.normal, tag);
+  volIn.faces.emplace_back(std::move(section), p.normal, tag, type);
+  volOut.faces.emplace_back(std::move(secReverse), -p.normal, tag, type);
 
   for(const auto& face : faces) {
-    Face fIn{face.normal, face.tag}, fOut{face.normal, face.tag};
+    Face fIn{face.normal, face.tag, face.type}, fOut{face.normal, face.tag, face.type};
     for(auto ix : face.indices) {
       auto dot = vertices[ix] * p;
       if(dot < epsilon)
@@ -124,11 +124,16 @@ Volume Volume::cut(const Plane& p, Index tag) {
 }
 
 void Volume::erode(float dist) {
+  struct Cut {
+    Plane plane;
+    Index tag;
+    Face::Type type;
+  };
   std::vector<Cut> cuts{};
   for(const auto& face : faces)
-    cuts.push_back({{face.normal, glm::dot(face.normal, vertices[face.indices.front()]) - dist}, face.tag});
+    cuts.push_back({{face.normal, glm::dot(face.normal, vertices[face.indices.front()]) - dist}, face.tag, face.type});
   for(const auto& cut : cuts)
-    this->cut(cut.plane, cut.tag);
+    this->cut(cut.plane, cut.tag, cut.type);
 }
 
 void Volume::dilate(float dist) {
@@ -138,7 +143,7 @@ void Volume::dilate(float dist) {
 
   // Give each face its own set of vertices
   for(const auto& face : faces) {
-    Face nface{face.normal, face.tag};
+    Face nface{face.normal, face.tag, face.type};
     for(auto ix : face.indices) {
       nvertices.push_back(vertices[ix]);
       nface.indices.push_back(ix_new++);
@@ -162,7 +167,7 @@ void Volume::dilate(float dist) {
         nfaces.push_back({{
             nfaces[i][j + 1], nfaces[i][j],
             nfaces[i2][j2 + 1], nfaces[i2][j2]},
-          glm::normalize(face.normal + face2.normal), dilate_face_tag});
+          glm::normalize(face.normal + face2.normal), 0, Face::Type::bevel});
       }
     }
   }
@@ -189,14 +194,14 @@ void Volume::dilate(float dist) {
         ix = f2[j2 + 1];
       }
       std::reverse(nface.begin(), nface.end());
-      nfaces.emplace_back(std::move(nface), normal, dilate_face_tag);
+      nfaces.emplace_back(std::move(nface), normal, 0, Face::Type::bevel);
       seen[pivot] = true;
     }
   }
 
   // Displace vertices
   for(const auto& nface : nfaces) {
-    if(nface.tag == dilate_face_tag) // Ignore extra faces
+    if(nface.type == Face::Type::bevel) // Ignore extra faces
       continue;
     glm::vec3 displ = dist * nface.normal;
     for(auto ix : nface.indices)
