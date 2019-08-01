@@ -90,11 +90,6 @@ void rotate_action(Context& ctx, glm::ivec2 coords_win) {
   glm::vec3 rot_center = glm::mat3{ctx.mxs.model} * center_proj;
   glm::vec2 offset_wld = glm::vec2{window_delta_to_world(ctx, coords_win - ctx.ui.buttondown_win, rot_center.z)};
   glm::vec2 normal_proj = glm::normalize(glm::vec2{ctx.mxs.model * glm::vec4{p.normal, 0.f}});
-#if 0
-  std::cout << rot_center.z << "  "
-    << model_offset.x << ' ' << model_offset.y << "  "
-    << normal_proj.x << ' ' << normal_proj.y << '\n';
-#endif
   float rot_radius = glm::length(ctx.ui.action_center - center_proj);
   float cross = offset_wld.x * normal_proj.y - offset_wld.y * normal_proj.x;
   float angle = -M_PI / (2 * rot_radius) * cross;
@@ -114,6 +109,23 @@ void draw(Context& ctx) {
   for(auto& piece : ctx.pieces) {
     glUniformMatrix4fv(ctx.gl.uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(piece.rotation * piece.rotation_temp));
     glDrawElements(GL_TRIANGLES, piece.gl_count, GL_UNSIGNED_SHORT, piece.gl_start);
+  }
+  if(ctx.ui.rot_action) {
+    glUseProgram(ctx.gl.prog_trivial);
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glm::vec2 q = world_to_nd(ctx, ctx.ui.buttondown_wld);
+    glm::vec2 array[] = {q, window_to_nd(ctx, ctx.ui.buttondown_win) + glm::vec2{0.1, 0.1}};
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), &array);
+    glEnableVertexAttribArray(0);
+    glm::vec4 color = {0, 1, 0, 0.5};
+    glUniform4fv(0, 1, glm::value_ptr(color));
+    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ZERO);
+    glEnable(GL_BLEND);
+    glDisable(GL_DEPTH_TEST);
+    glDrawArrays(GL_LINES, 0, 2);
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
   }
 }
 
@@ -147,6 +159,10 @@ void init_programs(Context& ctx) {
   ctx.gl.uniforms_click.matrix = glGetUniformLocation(ctx.gl.prog_click, "matrix");
   ctx.gl.uniforms_click.submodel = glGetUniformLocation(ctx.gl.prog_click, "submodel");
   ctx.gl.uniforms_click.volume = glGetUniformLocation(ctx.gl.prog_click, "volume");
+
+  ctx.gl.prog_trivial = GLutil::program{
+    GLutil::shader{"trivial.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},
+    GLutil::shader{"trivial.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
 }
 
 Volume init_shape(Context&, float size, const std::vector<Plane>& shape_cuts) {
