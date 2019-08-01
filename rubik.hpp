@@ -52,6 +52,7 @@ struct Context {
   } mxs;
   struct {
     glm::vec2 buttondown_loc;
+    glm::vec3 buttondown_coords;
     bool rot_view;
     bool rot_action;
     glm::vec3 action_center;
@@ -76,7 +77,7 @@ struct click_response {
   glm::vec3 coords;
   glm::vec3 normal;
 };
-std::optional<click_response> get_click_volume(Context& ctx, glm::vec2 point);
+std::optional<click_response> project_click(Context& ctx, glm::vec2 point);
 
 void draw(Context& ctx);
 

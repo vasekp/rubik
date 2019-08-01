@@ -410,7 +410,7 @@ void init_click_target(Context& ctx) {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-std::optional<click_response> get_click_volume(Context& ctx, glm::vec2 point) {
+std::optional<click_response> project_click(Context& ctx, glm::vec2 point) {
   glBindFramebuffer(GL_FRAMEBUFFER, ctx.gl.fb_click);
   glViewport(0, 0, 1, 1);
   glUseProgram(ctx.gl.prog_click);
