@@ -23,8 +23,15 @@ void button_cb(GLFWwindow* window, int, int action, int) {
     if(auto response = project_click(ctx, ctx.ui.buttondown_win); !response) {
       ctx.ui.rot_view = true;
     } else {
-      const Volume& v = ctx.pieces[response->volume_index].volume;
+      const Piece& p = ctx.pieces[response->volume_index];
+      const Volume& v = p.volume;
       auto cuts = v.get_rot_cuts();
+      // Ignore rotations parallel to the touched surface and back-facing rotations
+      cuts.erase(
+          std::remove_if(cuts.begin(), cuts.end(), [&ctx, &p, n = response->normal](const Cut& c) {
+            return std::abs(glm::dot(c.plane.normal, n)) > 0.99
+              || (glm::mat3{ctx.mxs.view * ctx.mxs.model * p.rotation} * c.plane.normal).z < -.5;
+          }), cuts.end());
       if(!cuts.empty()) {
         ctx.ui.rot_action = true;
         ctx.ui.buttondown_wld = response->coords;

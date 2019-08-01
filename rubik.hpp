@@ -26,6 +26,7 @@ struct Context {
     GLsizei basic_size;
     GLutil::program prog_model;
     GLutil::program prog_click;
+    GLutil::program prog_trivial;
     struct {
       GLint submodel;
       GLint modelview;
