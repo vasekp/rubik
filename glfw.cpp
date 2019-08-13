@@ -29,12 +29,12 @@ void button_cb(GLFWwindow* window, int, int action, int) {
       // Ignore rotations parallel to the touched surface and back-facing rotations
       cuts.erase(
           std::remove_if(cuts.begin(), cuts.end(), [&ctx, &p, n = response->normal](const Cut& c) {
-            return std::abs(glm::dot(c.plane.normal, n)) > 0.99
+            return std::abs(glm::dot(glm::mat3{p.rotation} * c.plane.normal, n)) > 0.99
               || (glm::mat3{ctx.mxs.view * ctx.mxs.model * p.rotation} * c.plane.normal).z < -.5;
           }), cuts.end());
       if(!cuts.empty()) {
         ctx.ui.rot_action = true;
-        ctx.ui.buttondown_wld = response->coords;
+        ctx.ui.buttondown_mod = response->coords;
         ctx.ui.action_center = v.center(); 
         ctx.ui.action_cut = cuts.back();
       } else

@@ -45,6 +45,10 @@ glm::vec2 world_to_nd(Context& ctx, glm::vec3 coords) {
   return {v.x / v.w, v.y / v.w};
 }
 
+glm::vec2 model_to_nd(Context& ctx, glm::vec3 coords) {
+  return world_to_nd(ctx, glm::mat3{ctx.mxs.model} * coords);
+}
+
 glm::vec4 nd_to_world(Context& ctx, glm::vec2 coords_nd, float z) {
   glm::vec4 v{ctx.mxs.proj * ctx.mxs.view * glm::vec4{0, 0, z, 1}};
   glm::vec2 last_two = glm::vec2{v.z, v.w};
@@ -478,7 +482,5 @@ std::optional<click_response> project_click(Context& ctx, glm::ivec2 point) {
   glReadPixels(0, 0, 1, 1, GL_RGB, GL_FLOAT, &coords);
   glReadBuffer(GL_COLOR_ATTACHMENT2);
   glReadPixels(0, 0, 1, 1, GL_RGB, GL_FLOAT, &normal);
-  coords = glm::mat3(ctx.mxs.model) * coords;
-  normal = glm::mat3(ctx.mxs.model) * normal;
   return {{static_cast<Index>(index - 1), coords, normal}};
 }
