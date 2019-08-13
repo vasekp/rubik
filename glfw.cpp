@@ -3,12 +3,10 @@
 #include "rubik.hpp"
 #include <GLFW/glfw3.h>
 
-glm::vec2 touch_location(GLFWwindow* window) {
+glm::ivec2 cursor_pos(GLFWwindow* window) {
   double x, y;
   glfwGetCursorPos(window, &x, &y);
-  int w, h;
-  glfwGetFramebufferSize(window, &w, &h);
-  return glm::vec2{float(x/w), -float(y/h)} * 2.f - glm::vec2(1, -1);
+  return {(int)x, (int)y};
 }
 
 void resize_cb(GLFWwindow* window, int w, int h) {
@@ -21,8 +19,8 @@ void resize_cb(GLFWwindow* window, int w, int h) {
 void button_cb(GLFWwindow* window, int, int action, int) {
   Context& ctx = *static_cast<Context*>(glfwGetWindowUserPointer(window));
   if(action == GLFW_PRESS) {
-    ctx.ui.buttondown_loc = touch_location(window);
-    if(auto response = project_click(ctx, ctx.ui.buttondown_loc); !response) {
+    ctx.ui.buttondown_win = cursor_pos(window);
+    if(auto response = project_click(ctx, ctx.ui.buttondown_win); !response) {
       ctx.ui.rot_view = true;
     } else {
       std::cout << response->volume_index << ' '
@@ -33,7 +31,7 @@ void button_cb(GLFWwindow* window, int, int action, int) {
       auto cuts = v.get_rot_cuts();
       if(!cuts.empty()) {
         ctx.ui.rot_action = true;
-        ctx.ui.buttondown_coords = response->coords;
+        ctx.ui.buttondown_wld = response->coords;
         ctx.ui.action_center = v.center(); 
         ctx.ui.action_cut = cuts.back();
       } else
@@ -41,9 +39,7 @@ void button_cb(GLFWwindow* window, int, int action, int) {
     }
   } else {
     if(ctx.ui.rot_view) {
-      double x, y;
-      glfwGetCursorPos(window, &x, &y);
-      rotate_model(ctx, touch_location(window), true);
+      rotate_model(ctx, cursor_pos(window), true);
       ctx.ui.rot_view = false;
     } else if(ctx.ui.rot_action) {
       for(auto& piece : ctx.pieces)
@@ -128,11 +124,11 @@ int main() {
 
     resize_cb(window, 0, 0);
     while(!glfwWindowShouldClose(window)) {
-      glm::vec2 loc = touch_location(window);
+      glm::vec2 cursor = cursor_pos(window);
       if(ctx.ui.rot_view)
-        rotate_model(ctx, loc, false);
+        rotate_model(ctx, cursor, false);
       if(ctx.ui.rot_action)
-        rotate_action(ctx, loc);
+        rotate_action(ctx, cursor);
       draw(ctx);
       glfwSwapBuffers(window);
       glfwPollEvents();

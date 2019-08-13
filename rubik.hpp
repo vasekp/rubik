@@ -36,7 +36,6 @@ struct Context {
     struct {
       GLint matrix;
       GLint submodel;
-      GLint location;
       GLint volume;
     } uniforms_click;
     GLuint fb_click;
@@ -51,8 +50,8 @@ struct Context {
     glm::mat4 model;
   } mxs;
   struct {
-    glm::vec2 buttondown_loc;
-    glm::vec3 buttondown_coords;
+    glm::ivec2 buttondown_win;
+    glm::vec3 buttondown_wld;
     bool rot_view;
     bool rot_action;
     glm::vec3 action_center;
@@ -69,15 +68,15 @@ void init_cubemap(Context& ctx, unsigned texUnit, const std::vector<Plane>& shap
 void init_click_target(Context& ctx);
 
 void update_proj(Context& ctx, int w, int h);
-void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite);
-void rotate_action(Context& ctx, glm::vec2 loc);
+void rotate_model(Context& ctx, glm::ivec2 cursor_wnd, bool rewrite);
+void rotate_action(Context& ctx, glm::ivec2 cursor_wnd);
 
 struct click_response {
   Index volume_index;
   glm::vec3 coords;
   glm::vec3 normal;
 };
-std::optional<click_response> project_click(Context& ctx, glm::vec2 point);
+std::optional<click_response> project_click(Context& ctx, glm::ivec2 point);
 
 void draw(Context& ctx);
 
