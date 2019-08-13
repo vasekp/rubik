@@ -40,30 +40,55 @@ void update_proj(Context& ctx, int w, int h) {
   glUniformMatrix4fv(ctx.gl.uniforms_model.proj, 1, GL_FALSE, glm::value_ptr(ctx.mxs.proj));
 }
 
-glm::vec4 unproject(Context& ctx, glm::vec2 loc, float z) {
-  glm::vec4 v{ctx.mxs.proj * ctx.mxs.view * glm::vec4{0, 0, z, 1}};
-  glm::vec2 last_two = glm::vec2{v.z, v.w};
-  return inverse(ctx.mxs.proj * ctx.mxs.view) * glm::vec4{last_two.y * loc, last_two};
+glm::vec2 world_to_nd(Context& ctx, glm::vec3 coords) {
+  glm::vec4 v{ctx.mxs.proj * ctx.mxs.view * glm::vec4{coords, 1}};
+  return {v.x / v.w, v.y / v.w};
 }
 
-void rotate_model(Context& ctx, glm::vec2 loc, bool rewrite) {
-  glm::vec2 model_offset = glm::vec2{unproject(ctx, loc - ctx.ui.buttondown_loc, 0)};
+glm::vec4 nd_to_world(Context& ctx, glm::vec2 coords_nd, float z) {
+  glm::vec4 v{ctx.mxs.proj * ctx.mxs.view * glm::vec4{0, 0, z, 1}};
+  glm::vec2 last_two = glm::vec2{v.z, v.w};
+  return inverse(ctx.mxs.proj * ctx.mxs.view) * glm::vec4{last_two.y * coords_nd, last_two};
+}
+
+glm::vec2 window_to_nd(Context& ctx, glm::ivec2 coords_win) {
+  const auto w = ctx.gl.viewport.w,
+             h = ctx.gl.viewport.h;
+  return glm::vec2{(coords_win.x+0.5f)/w, -(coords_win.y+0.5f)/h} * 2.f - glm::vec2(1, -1);
+}
+
+glm::vec2 window_delta_to_nd(Context& ctx, glm::ivec2 delta_win) {
+  const auto w = ctx.gl.viewport.w,
+             h = ctx.gl.viewport.h;
+  return glm::vec2{(float)delta_win.x/w, -(float)delta_win.y/h} * 2.f;
+}
+
+glm::vec4 window_to_world(Context& ctx, glm::ivec2 coords_win, float z) {
+  return nd_to_world(ctx, window_to_nd(ctx, coords_win), z);
+}
+
+glm::vec4 window_delta_to_world(Context& ctx, glm::ivec2 delta_win, float z) {
+  return nd_to_world(ctx, window_delta_to_nd(ctx, delta_win), z);
+}
+
+void rotate_model(Context& ctx, glm::ivec2 coords_win, bool rewrite) {
+  glm::vec2 offset_wld = glm::vec2{window_delta_to_world(ctx, coords_win - ctx.ui.buttondown_win, 0)};
   glm::mat4 model = glm::rotate(
       glm::rotate(
         glm::mat4{1},
-        -model_offset.x, {0, 1, 0}),
-      model_offset.y, {1, 0, 0}) * ctx.mxs.model;
+        -offset_wld.x, {0, 1, 0}),
+      offset_wld.y, {1, 0, 0}) * ctx.mxs.model;
   glUseProgram(ctx.gl.prog_model);
   glUniformMatrix4fv(ctx.gl.uniforms_model.modelview, 1, GL_FALSE, glm::value_ptr(ctx.mxs.view * model));
   if(rewrite)
     ctx.mxs.model = model;
 }
 
-void rotate_action(Context& ctx, glm::vec2 loc) {
+void rotate_action(Context& ctx, glm::ivec2 coords_win) {
   const Plane& p = ctx.ui.action_cut->plane;
   glm::vec3 center_proj = glm::dot(p.normal, ctx.ui.action_center) * p.normal;
   glm::vec3 rot_center = glm::mat3{ctx.mxs.model} * center_proj;
-  glm::vec2 model_offset = glm::vec2{unproject(ctx, loc - ctx.ui.buttondown_loc, rot_center.z)};
+  glm::vec2 offset_wld = glm::vec2{window_delta_to_world(ctx, coords_win - ctx.ui.buttondown_win, rot_center.z)};
   glm::vec2 normal_proj = glm::normalize(glm::vec2{ctx.mxs.model * glm::vec4{p.normal, 0.f}});
 #if 0
   std::cout << rot_center.z << "  "
@@ -71,7 +96,7 @@ void rotate_action(Context& ctx, glm::vec2 loc) {
     << normal_proj.x << ' ' << normal_proj.y << '\n';
 #endif
   float rot_radius = glm::length(ctx.ui.action_center - center_proj);
-  float cross = model_offset.x * normal_proj.y - model_offset.y * normal_proj.x;
+  float cross = offset_wld.x * normal_proj.y - offset_wld.y * normal_proj.x;
   float angle = -M_PI / (2 * rot_radius) * cross;
   for(auto& piece : ctx.pieces) {
     piece.rotation_temp = piece.volume.center() < p
@@ -123,7 +148,6 @@ void init_programs(Context& ctx) {
     GLutil::shader{"click.frag", GL_FRAGMENT_SHADER, GLutil::shader::from_file}};
   ctx.gl.uniforms_click.matrix = glGetUniformLocation(ctx.gl.prog_click, "matrix");
   ctx.gl.uniforms_click.submodel = glGetUniformLocation(ctx.gl.prog_click, "submodel");
-  ctx.gl.uniforms_click.location = glGetUniformLocation(ctx.gl.prog_click, "loc");
   ctx.gl.uniforms_click.volume = glGetUniformLocation(ctx.gl.prog_click, "volume");
 }
 
@@ -410,12 +434,11 @@ void init_click_target(Context& ctx) {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-std::optional<click_response> project_click(Context& ctx, glm::vec2 point) {
+std::optional<click_response> project_click(Context& ctx, glm::ivec2 point) {
   glBindFramebuffer(GL_FRAMEBUFFER, ctx.gl.fb_click);
-  glViewport(0, 0, 1, 1);
+  glViewport(-point.x, -(ctx.gl.viewport.h-1-point.y), ctx.gl.viewport.w, ctx.gl.viewport.h);
   glUseProgram(ctx.gl.prog_click);
   glUniformMatrix4fv(ctx.gl.uniforms_click.matrix, 1, GL_FALSE, glm::value_ptr(ctx.mxs.proj * ctx.mxs.view * ctx.mxs.model));
-  glUniform2fv(ctx.gl.uniforms_click.location, 1, glm::value_ptr(point));
 
   glBindVertexArray(ctx.gl.vao_full);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -441,5 +464,7 @@ std::optional<click_response> project_click(Context& ctx, glm::vec2 point) {
   glReadPixels(0, 0, 1, 1, GL_RGB, GL_FLOAT, &coords);
   glReadBuffer(GL_COLOR_ATTACHMENT2);
   glReadPixels(0, 0, 1, 1, GL_RGB, GL_FLOAT, &normal);
+  coords = glm::mat3(ctx.mxs.model) * coords;
+  normal = glm::mat3(ctx.mxs.model) * normal;
   return {{static_cast<Index>(index - 1), coords, normal}};
 }
