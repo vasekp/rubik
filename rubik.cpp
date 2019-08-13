@@ -118,16 +118,21 @@ void draw(Context& ctx) {
     glUseProgram(ctx.gl.prog_trivial);
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glm::vec2 q = world_to_nd(ctx, ctx.ui.buttondown_wld);
-    glm::vec2 array[] = {q, window_to_nd(ctx, ctx.ui.buttondown_win) + glm::vec2{0.1, 0.1}};
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), &array);
+    std::vector<glm::vec2> coords{};
+    coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod));
+    coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod + ctx.ui.normal));
+    for(const auto& disp : ctx.ui.disps) {
+      coords.push_back(coords.front());
+      coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod + 0.1f*disp));
+    }
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), coords.data());
     glEnableVertexAttribArray(0);
     glm::vec4 color = {0, 1, 0, 0.5};
     glUniform4fv(0, 1, glm::value_ptr(color));
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ZERO);
     glEnable(GL_BLEND);
     glDisable(GL_DEPTH_TEST);
-    glDrawArrays(GL_LINES, 0, 2);
+    glDrawArrays(GL_LINES, 0, coords.size());
     glEnable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
   }

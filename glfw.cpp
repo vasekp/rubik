@@ -30,13 +30,19 @@ void button_cb(GLFWwindow* window, int, int action, int) {
       cuts.erase(
           std::remove_if(cuts.begin(), cuts.end(), [&ctx, &p, n = response->normal](const Cut& c) {
             return std::abs(glm::dot(glm::mat3{p.rotation} * c.plane.normal, n)) > 0.99
-              || (glm::mat3{ctx.mxs.view * ctx.mxs.model * p.rotation} * c.plane.normal).z < -.5;
+              /*|| (glm::mat3{ctx.mxs.view * ctx.mxs.model * p.rotation} * c.plane.normal).z < -.5*/;
           }), cuts.end());
       if(!cuts.empty()) {
         ctx.ui.rot_action = true;
         ctx.ui.buttondown_mod = response->coords;
+        ctx.ui.normal = response->normal;
         ctx.ui.action_center = v.center(); 
         ctx.ui.action_cut = cuts.back();
+        ctx.ui.disps = {};
+        for(const auto& cut : cuts) {
+          ctx.ui.disps.push_back(glm::normalize(glm::cross(cut.plane.normal, response->normal)));
+          ctx.ui.disps.push_back(-glm::normalize(glm::cross(cut.plane.normal, response->normal)));
+        }
       } else
         ctx.ui.rot_view = true;
     }
