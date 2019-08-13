@@ -51,7 +51,7 @@ struct Context {
   } mxs;
   struct {
     glm::ivec2 buttondown_win;
-    glm::vec3 buttondown_wld;
+    glm::vec3 buttondown_mod;
     bool rot_view;
     bool rot_action;
     glm::vec3 action_center;
