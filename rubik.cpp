@@ -113,7 +113,6 @@ void draw(Context& ctx) {
   glBindVertexArray(ctx.gl.vao_full);
   for(auto& piece : ctx.pieces) {
     glUniformMatrix4fv(ctx.gl.uniforms_model.submodel, 1, GL_FALSE, glm::value_ptr(piece.rotation * piece.rotation_temp));
-    glUniform1i(ctx.gl.uniforms_model.highlight, GL_FALSE); //tag == ctx.ui.drag_volume ? GL_TRUE : GL_FALSE); TODO remove highlight completely
     glDrawElements(GL_TRIANGLES, piece.gl_count, GL_UNSIGNED_SHORT, piece.gl_start);
   }
 }
@@ -141,7 +140,6 @@ void init_programs(Context& ctx) {
   ctx.gl.uniforms_model.modelview = glGetUniformLocation(ctx.gl.prog_model, "modelview");
   ctx.gl.uniforms_model.proj = glGetUniformLocation(ctx.gl.prog_model, "proj");
   ctx.gl.uniforms_model.texture = glGetUniformLocation(ctx.gl.prog_model, "sampler");
-  ctx.gl.uniforms_model.highlight = glGetUniformLocation(ctx.gl.prog_model, "highlight");
 
   ctx.gl.prog_click = GLutil::program{
     GLutil::shader{"click.vert", GL_VERTEX_SHADER, GLutil::shader::from_file},

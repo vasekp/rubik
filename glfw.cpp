@@ -23,10 +23,6 @@ void button_cb(GLFWwindow* window, int, int action, int) {
     if(auto response = project_click(ctx, ctx.ui.buttondown_win); !response) {
       ctx.ui.rot_view = true;
     } else {
-      std::cout << response->volume_index << ' '
-        << response->coords.x << ' '
-        << response->coords.y << ' '
-        << response->coords.z << '\n';
       const Volume& v = ctx.pieces[response->volume_index].volume;
       auto cuts = v.get_rot_cuts();
       if(!cuts.empty()) {

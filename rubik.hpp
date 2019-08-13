@@ -31,7 +31,6 @@ struct Context {
       GLint modelview;
       GLint proj;
       GLint texture;
-      GLint highlight;
     } uniforms_model;
     struct {
       GLint matrix;
