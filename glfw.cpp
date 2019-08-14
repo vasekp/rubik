@@ -75,6 +75,7 @@ GLFWwindow* init_glfw() {
   //glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  glfwWindowHint(GLFW_SAMPLES, 4);
   GLFWwindow* window = glfwCreateWindow(640, 480, "Title", NULL, NULL);
   if(!window)
     throw std::runtime_error("glfwCreateWindow failed");
@@ -130,6 +131,7 @@ int main() {
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_MULTISAMPLE);
 
     resize_cb(window, 0, 0);
     while(!glfwWindowShouldClose(window)) {
