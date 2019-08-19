@@ -19,42 +19,9 @@ void resize_cb(GLFWwindow* window, int w, int h) {
 void button_cb(GLFWwindow* window, int, int action, int) {
   Context& ctx = *static_cast<Context*>(glfwGetWindowUserPointer(window));
   if(action == GLFW_PRESS) {
-    ctx.ui.buttondown_win = cursor_pos(window);
-    if(auto response = project_click(ctx, ctx.ui.buttondown_win); !response) {
-      ctx.ui.rot_view = true;
-    } else {
-      const Piece& p = ctx.pieces[response->volume_index];
-      const Volume& v = p.volume;
-      auto cuts = v.get_rot_cuts();
-      // Ignore rotations parallel to the touched surface and back-facing rotations
-      cuts.erase(
-          std::remove_if(cuts.begin(), cuts.end(), [&ctx, &p, n = response->normal](const Cut& c) {
-            return std::abs(glm::dot(glm::mat3{p.rotation} * c.plane.normal, n)) > 0.99
-              /*|| (glm::mat3{ctx.mxs.view * ctx.mxs.model * p.rotation} * c.plane.normal).z < -.5*/;
-          }), cuts.end());
-      if(!cuts.empty()) {
-        ctx.ui.rot_action = true;
-        ctx.ui.buttondown_mod = response->coords;
-        ctx.ui.normal = response->normal;
-        ctx.ui.action_center = v.center(); 
-        ctx.ui.action_cut = cuts.back();
-        ctx.ui.disps = {};
-        for(const auto& cut : cuts) {
-          ctx.ui.disps.push_back(glm::normalize(glm::cross(cut.plane.normal, response->normal)));
-          ctx.ui.disps.push_back(-glm::normalize(glm::cross(cut.plane.normal, response->normal)));
-        }
-      } else
-        ctx.ui.rot_view = true;
-    }
+    touch_start(ctx, cursor_pos(window));
   } else {
-    if(ctx.ui.rot_view) {
-      rotate_model(ctx, cursor_pos(window), true);
-      ctx.ui.rot_view = false;
-    } else if(ctx.ui.rot_action) {
-      for(auto& piece : ctx.pieces)
-        piece.rotation_temp = glm::mat4{1};
-      ctx.ui.rot_action = false;
-    }
+    touch_release(ctx, cursor_pos(window));
   }
 }
 
@@ -135,11 +102,8 @@ int main() {
 
     resize_cb(window, 0, 0);
     while(!glfwWindowShouldClose(window)) {
-      glm::vec2 cursor = cursor_pos(window);
-      if(ctx.ui.rot_view)
-        rotate_model(ctx, cursor, false);
-      if(ctx.ui.rot_action)
-        rotate_action(ctx, cursor);
+      if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS)
+        touch_move(ctx, cursor_pos(window));
       draw(ctx);
       glfwSwapBuffers(window);
       glfwPollEvents();

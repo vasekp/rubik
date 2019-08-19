@@ -69,24 +69,10 @@ void init_model_basic(Context& ctx, Volume shape);
 void init_cubemap(Context& ctx, unsigned texUnit, const std::vector<Plane>& shape_cuts, const std::vector<Cut>& cuts);
 void init_click_target(Context& ctx);
 
-void update_proj(Context& ctx, int w, int h);
-void rotate_model(Context& ctx, glm::ivec2 cursor_wnd, bool rewrite);
-void rotate_action(Context& ctx, glm::ivec2 cursor_wnd);
-
-struct click_response {
-  Index volume_index;
-  glm::vec3 coords;
-  glm::vec3 normal;
-};
-std::optional<click_response> project_click(Context& ctx, glm::ivec2 point);
-
 void draw(Context& ctx);
-
-template<>
-struct element_traits<glm::mat4> {
-  static glm::mat4 identity() {
-    return glm::mat4{1};
-  }
-};
+void update_proj(Context& ctx, int w, int h);
+void touch_start(Context& ctx, glm::ivec2 coords);
+void touch_move(Context& ctx, glm::ivec2 coords);
+void touch_release(Context& ctx, glm::ivec2 coords);
 
 #endif
