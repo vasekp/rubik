@@ -12,6 +12,13 @@
 #include "Group.hpp"
 #include "Permutation.hpp"
 
+template<>
+struct element_traits<glm::mat4> {
+  static glm::mat4 identity() {
+    return glm::mat4{1};
+  }
+};
+
 class Solid {
   
   Group<Permutation> group;
