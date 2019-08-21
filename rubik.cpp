@@ -58,6 +58,12 @@ glm::vec2 window_delta_to_nd(const Context& ctx, glm::ivec2 delta_win) {
   return glm::vec2{(float)delta_win.x/w, -(float)delta_win.y/h} * 2.f;
 }
 
+glm::ivec2 nd_to_window_delta(const Context& ctx, glm::vec2 coords_nd) {
+  const auto w = ctx.gl.viewport.w,
+             h = ctx.gl.viewport.h;
+  return glm::ivec2{(int)(coords_nd.x * w / 2), -(int)(coords_nd.y * h / 2)};
+}
+
 glm::vec4 window_to_world(const Context& ctx, glm::ivec2 coords_win, float z) {
   return nd_to_world(ctx, window_to_nd(ctx, coords_win), z);
 }
@@ -74,7 +80,7 @@ glm::vec3 window_delta_to_model_tangent(const Context& ctx, glm::ivec2 delta_win
   glm::mat3 lhs = glm::transpose(glm::mat3{
       pvmT[0] / denom - pvmT[3] / denom * ref.x / denom,
       pvmT[1] / denom - pvmT[3] / denom * ref.y / denom,
-      glm::mat3{ctx.mxs.model} * normal_mod
+      normal_mod
     });
   glm::vec3 rhs = glm::vec3{window_delta_to_nd(ctx, delta_win), 0};
   return glm::inverse(lhs) * rhs;
@@ -458,14 +464,18 @@ void rotate_model(Context& ctx, glm::ivec2 coords_win, bool rewrite) {
 }
 
 void rotate_action(Context& ctx, glm::ivec2 coords_win) {
-  const Plane& p = ctx.ui.action_cut->plane;
-  glm::vec3 center_proj = glm::dot(p.normal, ctx.ui.action_center) * p.normal;
-  glm::vec3 rot_center = glm::mat3{ctx.mxs.model} * center_proj;
-  glm::vec2 offset_wld = glm::vec2{window_delta_to_world(ctx, coords_win - ctx.ui.buttondown_win, rot_center.z)};
-  glm::vec2 normal_proj = glm::normalize(glm::vec2{ctx.mxs.model * glm::vec4{p.normal, 0.f}});
-  float rot_radius = glm::length(ctx.ui.action_center - center_proj);
-  float cross = offset_wld.x * normal_proj.y - offset_wld.y * normal_proj.x;
-  float angle = -M_PI / (2 * rot_radius) * cross;
+  auto tgt = window_delta_to_model_tangent(ctx, coords_win - ctx.ui.buttondown_win, ctx.ui.buttondown_mod, ctx.ui.normal);
+  using pair_type = decltype(ctx.ui.action_cuts)::value_type;
+  auto best = *std::max_element(ctx.ui.action_cuts.begin(), ctx.ui.action_cuts.end(),
+      [tgt](const pair_type& a, const pair_type& b) {
+        return std::abs(glm::dot(a.second, tgt)) < std::abs(glm::dot(b.second, tgt));
+      });
+  const Plane& p = best.first.plane;
+  float quality = glm::dot(glm::normalize(glm::vec2{coords_win - ctx.ui.buttondown_win}),
+      glm::normalize(glm::vec2{nd_to_window_delta(ctx, model_to_nd(ctx, best.second))}));
+  float angle = std::abs(quality) > 0.7f
+    ? glm::dot(best.second, tgt) / glm::length(ctx.ui.buttondown_mod)
+    : 0.f;
   for(auto& piece : ctx.pieces) {
     piece.rotation_temp = piece.volume.center() < p
       ? glm::rotate(glm::mat4{1}, angle, p.normal)
@@ -492,9 +502,9 @@ void draw(const Context& ctx) {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     std::vector<glm::vec2> coords{};
     coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod));
-    auto tgt = window_delta_to_model_tangent(ctx, {20, -20}, ctx.ui.buttondown_mod, ctx.ui.normal);
+    auto tgt = window_delta_to_model_tangent(ctx, {0, -0}, ctx.ui.buttondown_mod, ctx.ui.normal);
     coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod + tgt));
-    for(const auto& disp : ctx.ui.disps) {
+    for(const auto& [cut, disp] : ctx.ui.action_cuts) {
       coords.push_back(coords.front());
       coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod + 0.1f*disp));
     }
@@ -542,12 +552,9 @@ void touch_start(Context& ctx, glm::ivec2 coords) {
       ctx.ui.buttondown_mod = response->coords;
       ctx.ui.normal = response->normal;
       ctx.ui.action_center = v.center();
-      ctx.ui.action_cut = cuts.back();
-      ctx.ui.disps = {};
-      for(const auto& cut : cuts) {
-        ctx.ui.disps.push_back(glm::normalize(glm::cross(cut.plane.normal, response->normal)));
-        ctx.ui.disps.push_back(-glm::normalize(glm::cross(cut.plane.normal, response->normal)));
-      }
+      ctx.ui.action_cuts = {};
+      for(const auto& cut : cuts)
+        ctx.ui.action_cuts.push_back({cut, glm::normalize(glm::cross(cut.plane.normal, response->normal))});
     } else
       ctx.ui.rot_view = true;
   }
