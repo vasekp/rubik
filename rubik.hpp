@@ -53,11 +53,10 @@ struct Context {
     glm::ivec2 buttondown_win;
     glm::vec3 buttondown_mod;
     glm::vec3 normal;
-    std::vector<glm::vec3> disps;
     bool rot_view;
     bool rot_action;
     glm::vec3 action_center;
-    std::optional<Cut> action_cut;
+    std::vector<std::pair<Cut, glm::vec3>> action_cuts;
   } ui;
   std::vector<Piece> pieces;
 };
