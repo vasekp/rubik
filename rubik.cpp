@@ -66,6 +66,20 @@ glm::vec4 window_delta_to_world(const Context& ctx, glm::ivec2 delta_win, float 
   return nd_to_world(ctx, window_delta_to_nd(ctx, delta_win), z);
 }
 
+glm::vec3 window_delta_to_model_tangent(const Context& ctx, glm::ivec2 delta_win, glm::vec3 coords_mod, glm::vec3 normal_mod) {
+  glm::mat4 pvm = ctx.mxs.proj * ctx.mxs.view * ctx.mxs.model;
+  glm::vec4 ref = pvm * glm::vec4{coords_mod, 1};
+  float denom = ref.w;
+  glm::mat4 pvmT = glm::transpose(pvm);
+  glm::mat3 lhs = glm::transpose(glm::mat3{
+      pvmT[0] / denom - pvmT[3] / denom * ref.x / denom,
+      pvmT[1] / denom - pvmT[3] / denom * ref.y / denom,
+      glm::mat3{ctx.mxs.model} * normal_mod
+    });
+  glm::vec3 rhs = glm::vec3{window_delta_to_nd(ctx, delta_win), 0};
+  return glm::inverse(lhs) * rhs;
+}
+
 
 /***** INITIALIZATION *****/
 
@@ -478,7 +492,8 @@ void draw(const Context& ctx) {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     std::vector<glm::vec2> coords{};
     coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod));
-    coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod + ctx.ui.normal));
+    auto tgt = window_delta_to_model_tangent(ctx, {20, -20}, ctx.ui.buttondown_mod, ctx.ui.normal);
+    coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod + tgt));
     for(const auto& disp : ctx.ui.disps) {
       coords.push_back(coords.front());
       coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod + 0.1f*disp));
