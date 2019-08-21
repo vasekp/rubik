@@ -32,12 +32,24 @@ namespace click_outputs {
 /***** COORDINATE TRANSFORMS *****/
 
 glm::vec2 world_to_nd(const Context& ctx, glm::vec3 coords) {
-  glm::vec4 v{ctx.mxs.proj * ctx.mxs.view * glm::vec4{coords, 1}};
-  return {v.x / v.w, v.y / v.w};
+  glm::vec4 tmp{ctx.mxs.proj * ctx.mxs.view * glm::vec4{coords, 1}};
+  return glm::vec2{tmp} / tmp.w;
+}
+
+glm::vec2 world_tangent_to_nd_delta(const Context& ctx, glm::vec3 coords, glm::vec3 tangent) {
+  glm::mat4 projview = ctx.mxs.proj * ctx.mxs.view;
+  glm::vec4 r_0 = projview * glm::vec4{coords, 1};
+  glm::vec4 delta_r = projview * glm::vec4{tangent, 0};
+  float denom = r_0.w;
+  return glm::vec2{delta_r - delta_r.w * r_0 / denom} / denom;
+}
+
+glm::vec3 model_to_world(const Context& ctx, glm::vec3 coords) {
+  return glm::mat3{ctx.mxs.model} * coords;
 }
 
 glm::vec2 model_to_nd(const Context& ctx, glm::vec3 coords) {
-  return world_to_nd(ctx, glm::mat3{ctx.mxs.model} * coords);
+  return world_to_nd(ctx, model_to_world(ctx, coords));
 }
 
 glm::vec4 nd_to_world(const Context& ctx, glm::vec2 coords_nd, float z) {
@@ -477,12 +489,37 @@ void draw(const Context& ctx) {
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     std::vector<glm::vec2> coords{};
-    coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod));
-    coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod + ctx.ui.normal));
-    for(const auto& disp : ctx.ui.disps) {
-      coords.push_back(coords.front());
-      coords.push_back(model_to_nd(ctx, ctx.ui.buttondown_mod + 0.1f*disp));
-    }
+    glm::vec3 origin = model_to_world(ctx, ctx.ui.buttondown_mod);
+    /*glm::vec2 dx = world_tangent_to_nd_delta(ctx, origin, {1, 0, 0});
+    glm::vec2 dy = world_tangent_to_nd_delta(ctx, origin, {0, 1, 0});
+    glm::vec2 dz = world_tangent_to_nd_delta(ctx, origin, {0, 0, 1});
+    coords.push_back(world_to_nd(ctx, origin));
+    coords.push_back(coords.front() + dx / 10.f);
+    coords.push_back(coords.front());
+    coords.push_back(coords.front() + dy / 10.f);
+    coords.push_back(coords.front());
+    coords.push_back(coords.front() + dz / 10.f);*/
+    // CAN'T WORK: transform not unitary
+    //glm::vec2 n = glm::inverse(glm::mat2{ctx.mxs.proj}) * world_tangent_to_nd_delta(ctx, origin, model_to_world(ctx, ctx.ui.normal));
+    glm::vec2 n = glm::vec2{model_to_world(ctx, ctx.ui.normal) / 1.5f};
+    float theta = std::asin(std::hypotf(n.x, n.y));
+    float phi = std::atan2(n.y, n.x);
+    glm::mat3 mx = glm::mat3{glm::rotate(glm::rotate(glm::mat4{1}, phi, {0, 0, 1}), theta, {0, 1, 0})};
+    glm::vec3 dx_wld = mx * glm::vec3{1, 0, 0};
+    glm::vec3 dy_wld = mx * glm::vec3{0, 1, 0};
+    glm::vec3 dz_wld = mx * glm::vec3{0, 0, 1};
+    glm::vec2 dx = world_tangent_to_nd_delta(ctx, origin, dx_wld);
+    glm::vec2 dy = world_tangent_to_nd_delta(ctx, origin, dy_wld);
+    glm::vec2 dz1 = world_tangent_to_nd_delta(ctx, origin, dz_wld);
+    glm::vec2 dz2 = world_tangent_to_nd_delta(ctx, origin, model_to_world(ctx, ctx.ui.normal));
+    coords.push_back(world_to_nd(ctx, origin));
+    /*coords.push_back(coords.front() + dx / 10.f);
+    coords.push_back(coords.front());
+    coords.push_back(coords.front() + dy / 10.f);
+    coords.push_back(coords.front());*/
+    coords.push_back(coords.front() + dz1 / 10.f);
+    coords.push_back(coords.front());
+    coords.push_back(coords.front() + dz2 / 10.f);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), coords.data());
     glEnableVertexAttribArray(0);
     glm::vec4 color = {0, 1, 0, 0.5};
