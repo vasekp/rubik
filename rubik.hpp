@@ -69,7 +69,7 @@ void init_model_basic(Context& ctx, Volume shape);
 void init_cubemap(Context& ctx, unsigned texUnit, const std::vector<Plane>& shape_cuts, const std::vector<Cut>& cuts);
 void init_click_target(Context& ctx);
 
-void draw(Context& ctx);
+void draw(const Context& ctx);
 void update_proj(Context& ctx, int w, int h);
 void touch_start(Context& ctx, glm::ivec2 coords);
 void touch_move(Context& ctx, glm::ivec2 coords);

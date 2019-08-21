@@ -31,38 +31,38 @@ namespace click_outputs {
 
 /***** COORDINATE TRANSFORMS *****/
 
-glm::vec2 world_to_nd(Context& ctx, glm::vec3 coords) {
+glm::vec2 world_to_nd(const Context& ctx, glm::vec3 coords) {
   glm::vec4 v{ctx.mxs.proj * ctx.mxs.view * glm::vec4{coords, 1}};
   return {v.x / v.w, v.y / v.w};
 }
 
-glm::vec2 model_to_nd(Context& ctx, glm::vec3 coords) {
+glm::vec2 model_to_nd(const Context& ctx, glm::vec3 coords) {
   return world_to_nd(ctx, glm::mat3{ctx.mxs.model} * coords);
 }
 
-glm::vec4 nd_to_world(Context& ctx, glm::vec2 coords_nd, float z) {
+glm::vec4 nd_to_world(const Context& ctx, glm::vec2 coords_nd, float z) {
   glm::vec4 v{ctx.mxs.proj * ctx.mxs.view * glm::vec4{0, 0, z, 1}};
   glm::vec2 last_two = glm::vec2{v.z, v.w};
   return inverse(ctx.mxs.proj * ctx.mxs.view) * glm::vec4{last_two.y * coords_nd, last_two};
 }
 
-glm::vec2 window_to_nd(Context& ctx, glm::ivec2 coords_win) {
+glm::vec2 window_to_nd(const Context& ctx, glm::ivec2 coords_win) {
   const auto w = ctx.gl.viewport.w,
              h = ctx.gl.viewport.h;
   return glm::vec2{(coords_win.x+0.5f)/w, -(coords_win.y+0.5f)/h} * 2.f - glm::vec2(1, -1);
 }
 
-glm::vec2 window_delta_to_nd(Context& ctx, glm::ivec2 delta_win) {
+glm::vec2 window_delta_to_nd(const Context& ctx, glm::ivec2 delta_win) {
   const auto w = ctx.gl.viewport.w,
              h = ctx.gl.viewport.h;
   return glm::vec2{(float)delta_win.x/w, -(float)delta_win.y/h} * 2.f;
 }
 
-glm::vec4 window_to_world(Context& ctx, glm::ivec2 coords_win, float z) {
+glm::vec4 window_to_world(const Context& ctx, glm::ivec2 coords_win, float z) {
   return nd_to_world(ctx, window_to_nd(ctx, coords_win), z);
 }
 
-glm::vec4 window_delta_to_world(Context& ctx, glm::ivec2 delta_win, float z) {
+glm::vec4 window_delta_to_world(const Context& ctx, glm::ivec2 delta_win, float z) {
   return nd_to_world(ctx, window_delta_to_nd(ctx, delta_win), z);
 }
 
@@ -397,7 +397,7 @@ struct click_response {
   glm::vec3 normal;
 };
 
-std::optional<click_response> window_to_model(Context& ctx, glm::ivec2 coords_win) {
+std::optional<click_response> window_to_model(const Context& ctx, glm::ivec2 coords_win) {
   glBindFramebuffer(GL_FRAMEBUFFER, ctx.gl.fb_click);
   glViewport(-coords_win.x, -(ctx.gl.viewport.h-1-coords_win.y), ctx.gl.viewport.w, ctx.gl.viewport.h);
   glUseProgram(ctx.gl.prog_click);
@@ -462,7 +462,7 @@ void rotate_action(Context& ctx, glm::ivec2 coords_win) {
 
 /***** EXTERNAL UI FUNCTIONS *****/
 
-void draw(Context& ctx) {
+void draw(const Context& ctx) {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(0, 0, ctx.gl.viewport.w, ctx.gl.viewport.h);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
