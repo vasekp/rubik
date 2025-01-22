@@ -67,7 +67,7 @@ int main() {
   /*Solid shape = Solid::platonic(4, 3);
   Index ix = 0;
   float r_face = shape.r_face();
-  for(const auto [perm, vector] : shape.face_dirs()) {
+  for(const auto& [perm, vector] : shape.face_dirs()) {
     shape_cuts.push_back({{vector, r_face}, ++ix});
     cuts.push_back({vector, r_face / 3});
   }*/
@@ -75,13 +75,13 @@ int main() {
   Solid shape = Solid::dihedral(3, 0.5);
   Index ix = 0;
   float r_edge = shape.r_edge();
-  for(const auto [perm, vector] : shape.edge_dirs()) {
+  for(const auto& [perm, vector] : shape.edge_dirs()) {
     shape_cuts.push_back({{vector, r_edge}, ++ix});
     cuts.push_back({vector, -r_edge / 2});
     cuts.push_back({vector, r_edge / 4});
   }
   float r_face = shape.r_face();
-  for(const auto [perm, vector] : shape.face_dirs()) {
+  for(const auto& [perm, vector] : shape.face_dirs()) {
     shape_cuts.push_back({{vector, r_face}, ++ix});
     cuts.push_back({vector, 0});
   }

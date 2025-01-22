@@ -1,12 +1,13 @@
 #include "Mould.hpp"
 
 #include <map>
+#include <initializer_list>
 
 Volume::Volume(float size) {
-  for(float x = -1; x <= 1; x += 2)
-  for(float y = -1; y <= 1; y += 2)
-  for(float z = -1; z <= 1; z += 2)
-    vertices.push_back({size*x, size*y, size*z});
+  for(float x : {-size, size})
+  for(float y : {-size, size})
+  for(float z : {-size, size})
+    vertices.push_back({x, y, z});
   faces.push_back({{0, 2, 3, 1}, {-1, 0, 0}});
   faces.push_back({{4, 5, 7, 6}, {1, 0, 0}});
   faces.push_back({{0, 1, 5, 4}, {0, -1, 0}});
