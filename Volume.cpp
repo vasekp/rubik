@@ -224,7 +224,7 @@ std::vector<Index> Volume::find_section(const Plane& p) {
     unsigned cCross = 0;
     for(auto ix : face.indices) {
       auto dot = vertices[ix] * p;
-      if(abs(dot) < epsilon)
+      if(std::abs(dot) < epsilon)
         cCross++;
     }
     if(cCross >= 2)
@@ -237,7 +237,7 @@ std::vector<Index> Volume::traverse_start(const Face& f, const Plane& p) {
   size_t i;
   auto sz = f.indices.size();
   for(i = 0; i < sz; i++)
-    if(abs(vertices[f.indices[i]] * p) < epsilon)
+    if(std::abs(vertices[f.indices[i]] * p) < epsilon)
       break;
   assert(i < sz);
   Index ixPivot = f[i];
@@ -245,7 +245,7 @@ std::vector<Index> Volume::traverse_start(const Face& f, const Plane& p) {
   Index ixPos = f[i - 1];
   if(vertices[ixNeg] * p > epsilon || vertices[ixPos] * p < -epsilon) {
     for(i++; i < sz; i++)
-      if(abs(vertices[f.indices[i]] * p) < epsilon)
+      if(std::abs(vertices[f.indices[i]] * p) < epsilon)
         break;
     assert(i < sz);
     ixPivot = f[i];
@@ -263,13 +263,13 @@ std::vector<Index> Volume::traverse_nbours(std::vector<Index> section, const Pla
     << ", ixNeg = " << ixNeg
     << ", ixPos = " << ixPos << '\n';
 #endif
-  assert(abs(vertices[ixPivot] * p) < epsilon && vertices[ixNeg] * p < epsilon && vertices[ixPos] * p > -epsilon);
+  assert(std::abs(vertices[ixPivot] * p) < epsilon && vertices[ixNeg] * p < epsilon && vertices[ixPos] * p > -epsilon);
   Index ix = ixNeg;
   for(;;) {
 #ifdef DEBUG
     std::clog << " ... " << ix << " (" << vertices[ix] * p << ")\n";
 #endif
-    if(abs(vertices[ix] * p) < epsilon) {
+    if(std::abs(vertices[ix] * p) < epsilon) {
       if(section.front() == ix) // loop closed, done
         return section;
       else {
@@ -305,7 +305,7 @@ std::vector<Index> Volume::traverse_face(std::vector<Index> section, const Plane
 #ifdef DEBUG
     std::clog << " ... " << ix << " (" << vertices[ix] * p << ")\n";
 #endif
-    if(abs(vertices[ix] * p) < epsilon) {
+    if(std::abs(vertices[ix] * p) < epsilon) {
       if(section.front() == ix) // loop closed
         return section;
       else {
